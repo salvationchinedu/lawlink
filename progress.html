@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – My progress</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>My progress</h1>
+  </header>
+  <main>
+    <div class="stats" id="stats"></div>
+    <div id="last"></div>
+    <div id="list"></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var P=Prog.get();
+function total(c){var n=0;c.parts.forEach(function(x){n+=x.topics.length});return n}
+var rows=COURSES.map(function(c){return {c:c,t:total(c),d:Prog.doneIn(c.id),s:!!P.saved[c.id]}}).filter(function(r){return r.d>0||r.s});
+var done=0; for(var k in P.done) if(k.indexOf('t:')===0) done++;
+var started=rows.filter(function(r){return r.d>0}).length, finished=rows.filter(function(r){return r.t&&r.d>=r.t}).length;
+$('stats').innerHTML=[[done,'Topics done'],[started,'Courses started'],[finished,'Courses finished'],[Object.keys(P.saved).length,'Saved']].map(function(a){return '<div><strong>'+a[0]+'</strong><span>'+a[1]+'</span></div>'}).join('');
+if(P.last&&P.last.c){
+  var L=P.last, href='note.html?c='+encodeURIComponent(L.c)+(L.p!==null&&L.p!==undefined?'&p='+L.p+'&i='+L.i:'');
+  $('last').innerHTML='<div class="gh">Where you stopped</div><a class="crow" href="'+href+'"><strong>'+esc(L.t)+'</strong><span class="m">'+esc(L.cn)+' · Tap to continue</span></a>';
+}
+rows.sort(function(a,b){ var pa=a.t?a.d/a.t:0, pb=b.t?b.d/b.t:0; return (b.d>0)-(a.d>0)||pb-pa||a.c.name.localeCompare(b.c.name); });
+$('list').innerHTML=rows.length?'<div class="gh">Your courses<small>'+rows.length+'</small></div>'+rows.map(function(r){
+  var pct=r.t?Math.round(r.d/r.t*100):0;
+  return '<a class="crow" href="course.html?id='+encodeURIComponent(r.c.id)+'"><strong>'+esc(r.c.name)+'</strong><span class="m">'+(r.t?r.d+' of '+r.t+' topics done · '+pct+'%':'Saved · topics coming soon')+'</span>'+(r.t?'<span class="bar" role="img" aria-label="'+pct+' percent done"><i style="width:'+pct+'%"></i></span>':'')+'</a>';
+}).join(''):'<div class="empty"><h3>Nothing here yet</h3><p>Save a course or mark a topic as done and it will show up here.</p><a class="btn" href="courses.html">Browse courses</a></div>';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Case</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="ib" onclick="history.length>1?history.back():location.href='courses.html'" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>Case</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <h2 id="ttl" style="font-size:24px;margin:10px 0 2px"></h2>
+    <div class="also" id="cit"></div>
+    <div id="admin" class="hidden"></div>
+    <div id="body"></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var id=new URLSearchParams(location.search).get('id'), isAdmin=false, cs=null;
+
+function sec(h,t){ return t&&String(t).trim()&&t!=='Not confirmed'?'<div class="kv"><h2>'+esc(h)+'</h2><div class="rich">'+rich(t)+'</div></div>':''; }
+function noteLink(n){
+  var m=String(n.noteId).split(':'), c=m[1];
+  return '<a class="auth" href="note.html?c='+encodeURIComponent(c)+(m[0]==='t'?'&p='+m[2]+'&i='+m[3]:'')+'">'+esc(n.label)+'</a>';
+}
+function render(){
+  document.title='LawLink – '+cs.name;
+  $('ttl').textContent=cs.name; $('cit').textContent=cs.citation||'';
+  var d=cs.data, meta='<span class="pill">by LawLink</span>';
+  if(d&&d.goodLaw) meta+='<span class="pill'+(d.goodLaw==='Still good law'?' tip':'')+'">'+esc(d.goodLaw)+'</span>';
+  if(d&&d.court) meta+='<span class="pill">'+esc(d.court)+(d.year?', '+esc(d.year):'')+'</span>';
+  $('meta').innerHTML=meta;
+
+  if(isAdmin){
+    $('admin').classList.remove('hidden');
+    $('admin').innerHTML='<h3>Admin</h3><div>Status: '+esc(cs.status==='generated'?'Generated':cs.status==='unverifiable'?'Could not be verified':'Not generated')+'</div><div class="btns"><button class="btn" id="gen">'+(cs.status==='generated'?'Regenerate case':'Generate case')+'</button></div><div class="msg" id="amsg" role="status"></div>';
+  }
+  var h='';
+  if(cs.status==='generated'&&d){
+    h+=sec('Principle established',d.principle)+sec('Facts',d.facts);
+    if(d.issues&&d.issues.length) h+='<div class="kv"><h2>Issues</h2><div class="rich"><ul>'+d.issues.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul></div></div>';
+    h+=sec('Decision',d.decision)+sec('Ratio decidendi',d.ratio)+sec('Obiter dicta',d.obiter);
+    if(d.related&&d.related.length) h+='<div class="kv"><h2>Related cases</h2>'+d.related.map(function(r){return '<div class="rel">'+esc(r.name)+' <span class="cit">('+esc(r.relation)+')</span></div>'}).join('')+'</div>';
+    h+=sec('Criticism',d.criticism)+sec('Exam focus',d.examFocus)+sec('Sample question',d.sampleQuestion);
+  }else if(cs.status==='unverifiable'){
+    h='<div class="soonbox"><h3>This case could not be verified</h3><p>We could not confirm this case, so no page was created. It may have been cited with the wrong name or citation.</p></div>';
+  }else{
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This case page has not been written yet. Please check back soon.</p></div>';
+  }
+  if(cs.citedIn&&cs.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+cs.citedIn.map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
+  $('body').innerHTML=h;
+}
+async function load(){
+  try{ cs=await LawLink.getCase(id); render(); }
+  catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('ttl').textContent='Case not found'; $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; }
+}
+$('admin').addEventListener('click',async function(e){
+  var b=e.target.closest('#gen'); if(!b) return;
+  b.disabled=true; b.textContent='Writing…'; $('amsg').textContent='This can take up to a minute.';
+  try{ cs=await LawLink.genCase(id); render(); }
+  catch(x){ b.disabled=false; b.textContent='Generate case'; $('amsg').textContent=x.message; $('amsg').className='msg err'; }
+});
+LawLink.me().then(function(u){isAdmin=u.role==='admin'; load()}).catch(load);
+})();
+</script>
+</body>
+</html>

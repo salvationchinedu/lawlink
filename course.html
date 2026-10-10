@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Course</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="courses.html" aria-label="Back to courses" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="title">Course</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <main>
+    <div class="cinfo" id="info"></div>
+    <a class="crow" id="cnote" href="note.html?c="><strong>Course note</strong><span class="m" id="cnotem">Overview, scope and study guide</span></a>
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <ol class="topics" id="topics"></ol>
+    <div id="empty"></div>
+  </main>
+
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+var id=new URLSearchParams(location.search).get('id');
+var c=COURSES.filter(function(x){return x.id===id})[0];
+if(!c){
+  $('title').textContent='Course not found';
+  $('empty').innerHTML='<div class="soonbox"><h3>We could not find that course</h3><p><a href="courses.html" class="btn" style="text-decoration:none;margin-top:12px">Back to courses</a></p></div>';
+  return;
+}
+document.title='LawLink – '+c.name;
+$('cnote').href='note.html?c='+encodeURIComponent(c.id);
+$('title').textContent=c.name;
+
+var GN={'Core':'Core course','Electives':'Elective','Islamic law':'Islamic law','General':'General course'};
+var info='<span class="pill">'+esc(GN[c.group]||c.group)+'</span>';
+if(c.level) info+='<span class="pill">'+c.level+' Level</span>';
+if(c.cle===2) info+='<span class="pill tip">★ CLE required</span>'; else if(c.cle===1) info+='<span class="pill">† Listed by some sources</span>';
+if(c.aliases.length) info+='<div class="also">Also called: '+c.aliases.map(esc).join(', ')+'</div>';
+info+='<div class="btns" style="margin-top:10px;align-items:center"><button class="btn alt" id="save">Save course</button><span class="msg" id="prog" style="margin:0"></span></div>';
+$('info').innerHTML=info;
+
+var cur=0;
+function drawTabs(){
+  if(c.parts.length<2){ $('tabs').classList.add('hidden'); return; }
+  $('tabs').innerHTML=c.parts.map(function(p,i){return '<button role="tab" data-i="'+i+'" aria-selected="'+(i===cur)+'">'+esc(p.label.replace(/ \(.*\)/,''))+'</button>'}).join('');
+}
+var ready={};
+function total(){var n=0;c.parts.forEach(function(x){n+=x.topics.length});return n}
+function drawProg(){
+  var d=Prog.doneIn(c.id), t=total(), sv=!!Prog.get().saved[c.id];
+  $('save').textContent=sv?'Saved ✓':'Save course';
+  $('prog').textContent=t?d+' of '+t+' topics done':'';
+}
+function drawTopics(){
+  var p=c.parts[cur], P=Prog.get();
+  $('topics').innerHTML=p.topics.map(function(t,i){
+    var nid='t:'+c.id+':'+cur+':'+i, ok=ready[nid]&&ready[nid].status==='complete', dn=!!P.done[nid];
+    return '<li class="topic" style="display:flex;align-items:center"><a href="note.html?c='+encodeURIComponent(c.id)+'&p='+cur+'&i='+i+'" style="flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;padding:13px 0 13px 16px;text-decoration:none;color:var(--text)"><span class="n">'+(i+1)+'</span><span class="t">'+esc(t)+(ok?' <span style="color:var(--sage);font-size:13px;font-weight:600">· Note ready</span>':'')+'</span></a><button class="chk" data-id="'+nid+'" aria-pressed="'+dn+'" aria-label="Mark topic '+(i+1)+' as done" style="flex:none;width:48px;height:48px;border:0;background:none;color:'+(dn?'var(--sage)':'var(--muted)')+';cursor:pointer;font-size:22px">'+(dn?'✓':'○')+'</button></li>';
+  }).join('');
+  drawProg();
+}
+if(!c.parts.length){
+  $('empty').innerHTML='<div class="soonbox"><h3>Topics coming soon</h3><p>We have not found a published list of topics for this course yet. They will be added by specialists.</p></div>';
+}else{
+  drawTabs(); drawTopics();
+}
+if(!c.parts.length) drawProg();
+$('save').onclick=function(){Prog.toggle('saved',c.id);drawProg()};
+$('topics').onclick=function(e){var b=e.target.closest('.chk');if(!b)return;Prog.toggle('done',b.dataset.id);drawTopics()};
+$('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;drawTabs();drawTopics();window.scrollTo(0,0)};
+
+LawLink.libList(['c:'+c.id,'t:'+c.id+':']).then(function(m){
+  ready=m; var cn=m['c:'+c.id]; if(cn&&cn.status==='complete') $('cnotem').innerHTML='<span style="color:var(--sage);font-weight:600">Note ready</span> · Overview, scope and study guide';
+  if(c.parts.length) drawTopics();
+}).catch(function(){});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Community</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+
+<div id="listView">
+  <header class="top">
+    <h1>Community</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Search questions and tips" aria-label="Search questions and tips">
+    </label>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by type">
+    <button class="chip" data-t="All" aria-pressed="true">All</button>
+    <button class="chip" data-t="Question" aria-pressed="false">Questions</button>
+    <button class="chip" data-t="Tip" aria-pressed="false">Tips</button>
+  </div>
+  <main>
+    <div class="count" id="count" aria-live="polite">Loading…</div>
+    <div id="list"></div>
+  </main>
+  <button class="fab" id="add" aria-label="New post"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+
+<div id="threadView" class="hidden">
+  <header class="top">
+    <button class="ib" data-back aria-label="Back to community"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>Discussion</h1>
+  </header>
+  <main>
+    <div class="thread" id="post"></div>
+    <div id="replies" style="margin-top:6px"></div>
+    <div class="rbox">
+      <label class="f" for="rb">Your reply</label>
+      <textarea class="in" id="rb" placeholder="Share what you know"></textarea>
+      <div class="msg err" id="rerr" role="alert"></div>
+      <button class="btn" id="rsend" style="width:100%;margin-top:6px">Post reply</button>
+    </div>
+  </main>
+</div>
+
+<div id="composeView" class="hidden">
+  <header class="top">
+    <button class="ib" data-back aria-label="Back to community"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>New post</h1>
+  </header>
+  <main>
+    <div class="row">
+      <div><label class="f" for="pt" style="margin-top:4px">Type</label>
+        <select class="in" id="pt"><option value="Question">Question</option><option value="Tip">Tip</option></select></div>
+      <div><label class="f" for="pc" style="margin-top:4px">Course</label><select class="in" id="pc"></select></div>
+    </div>
+    <label class="f" for="ptitle">Title</label>
+    <input class="in" id="ptitle" maxlength="150" placeholder="e.g. How do I tell ratio from obiter?">
+    <label class="f" for="pbody">Details</label>
+    <textarea class="in" id="pbody" placeholder="Explain your question or tip. Name the case or statute if you can."></textarea>
+    <div class="msg err" id="perr" role="alert"></div>
+    <button class="btn" id="psend" style="width:100%;margin-top:6px">Post</button>
+    <p class="msg">Posts are visible to all LawLink students. Student posts are not official legal authority, so check the original source.</p>
+  </main>
+</div>
+
+<nav class="nav" aria-label="Main"><div>
+  <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+  <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+  <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+  <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+  <a href="community.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+</div></nav>
+</div>
+
+<script src="api.js"></script>
+<script>
+(function(){
+var COURSES=['General','Criminal Law','Law of Contract','Constitutional Law','Law of Tort','Legal Method','Other'];
+var PK='lawlink-posts-cache', posts=[], type='All', cur=null, loaded=false;
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+try{ var c=JSON.parse(localStorage.getItem(PK)); if(c&&c.length){posts=c;loaded=true} }catch(e){}
+function cache(){ try{localStorage.setItem(PK,JSON.stringify(posts))}catch(e){} }
+
+function ago(ts){
+  var m=Math.floor((Date.now()-ts)/60000);
+  if(m<1)return 'just now'; if(m<60)return m+'m ago';
+  var h=Math.floor(m/60); if(h<24)return h+'h ago';
+  var d=Math.floor(h/24); return d+(d===1?' day ago':' days ago');
+}
+function authFail(e){ if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html?next=community.html'); return true; } return false; }
+function netMsg(e,what){ return (e instanceof TypeError)?'Could not '+what+'. Check your data and try again.':e.message; }
+function views(v){ ['listView','threadView','composeView'].forEach(function(id){$(id).classList.toggle('hidden',id!==v)}); window.scrollTo(0,0); }
+function pill(t){ return '<span class="pill'+(t==='Tip'?' tip':'')+'">'+esc(t)+'</span>'; }
+function byline(a,l,ts){ return '<div class="by"><div class="av">'+esc(l)+'</div><div><b>'+esc(a)+'</b><small>'+esc(l)+' Level · '+ago(ts)+'</small></div></div>'; }
+
+function render(){
+  document.querySelectorAll('#chips .chip').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.t===type)});
+  var q=$('q').value.trim().toLowerCase();
+  var r=posts.filter(function(p){
+    return (type==='All'||p.type===type)&&(!q||(p.title+' '+p.body+' '+p.course).toLowerCase().indexOf(q)>-1);
+  });
+  if(loaded) $('count').textContent=r.length+(r.length===1?' post':' posts');
+  if(!r.length){
+    $('list').innerHTML=loaded?'<div class="empty"><h3>'+(posts.length?'No posts match':'Nothing here yet')+'</h3><p>'+(posts.length?'Try a different word or filter.':'Be the first to ask a question or share a tip.')+'</p></div>':'';
+    return;
+  }
+  $('list').innerHTML=r.map(function(p){
+    return '<button class="note'+(p.type==='Tip'?' tip':'')+'" data-id="'+esc(p.id)+'"><div class="meta">'+pill(p.type)+esc(p.course)+'</div><h3 style="margin-top:6px">'+esc(p.title)+'</h3><p>'+esc(p.body)+'</p><div class="foot">'+esc(p.author)+', '+esc(p.level)+' Level · '+ago(p.ts)+' · '+p.replies+(p.replies===1?' reply':' replies')+'</div></button>';
+  }).join('');
+}
+
+async function loadList(){
+  try{ posts=await LawLink.listPosts(); loaded=true; cache(); render(); }
+  catch(e){ if(authFail(e))return; loaded=true; $('count').textContent='Offline. Showing saved posts.'; render(); }
+}
+
+function renderThread(d){
+  var p=d.post;
+  $('post').innerHTML=pill(p.type)+'<span class="meta" style="font-size:13px;color:var(--muted)">'+esc(p.course)+'</span><h2>'+esc(p.title)+'</h2>'+byline(p.author,p.level,p.ts)+'<p class="body">'+esc(p.body)+'</p>'+(p.mine?'<button class="reply x" id="delpost" style="margin:12px 0 0">Delete post</button>':'');
+  $('replies').innerHTML=d.replies.length?'<h3 style="margin:14px 0 0;font-size:17px">'+d.replies.length+(d.replies.length===1?' reply':' replies')+'</h3>'+d.replies.map(function(r){
+    return '<div class="reply">'+byline(r.author,r.level,r.ts)+'<p class="body">'+esc(r.body)+'</p>'+(r.mine?'<button class="x" data-rid="'+esc(r.id)+'">Delete</button>':'')+'</div>';
+  }).join(''):'<p class="msg" style="margin-top:14px">No replies yet. Be the first to help.</p>';
+}
+async function openThread(id){
+  cur=id; views('threadView'); $('rerr').textContent=''; $('rb').value='';
+  var p=posts.filter(function(x){return x.id===id})[0];
+  if(p) renderThread({post:p,replies:[]}); $('replies').innerHTML='<p class="msg">Loading replies…</p>';
+  await refreshThread();
+}
+async function refreshThread(){
+  try{ renderThread(await LawLink.getPost(cur)); }
+  catch(e){ if(authFail(e))return; $('replies').innerHTML='<p class="msg err">'+esc(netMsg(e,'load replies'))+'</p>'; }
+}
+function back(){ views('listView'); render(); loadList(); }
+
+// Two-tap delete helper
+function twoTap(btn,label,action){
+  if(btn.dataset.armed){ btn.disabled=true; btn.textContent='Deleting…'; action(); return; }
+  btn.dataset.armed='1'; btn.textContent='Tap again to delete';
+  setTimeout(function(){ if(btn.isConnected&&!btn.disabled){ delete btn.dataset.armed; btn.textContent=label; } },3000);
+}
+
+$('pc').innerHTML=COURSES.map(function(c){return '<option>'+c+'</option>'}).join('');
+$('q').oninput=render;
+$('chips').onclick=function(e){var b=e.target.closest('.chip');if(b){type=b.dataset.t;render()}};
+$('list').onclick=function(e){var b=e.target.closest('.note');if(b)openThread(b.dataset.id)};
+document.querySelectorAll('[data-back]').forEach(function(b){b.onclick=back});
+$('add').onclick=function(){ $('ptitle').value='';$('pbody').value='';$('perr').textContent='';views('composeView'); };
+
+$('psend').onclick=async function(){
+  var b=$('psend'), post={type:$('pt').value,course:$('pc').value,title:$('ptitle').value.trim(),body:$('pbody').value.trim()};
+  if(!post.title){$('perr').textContent='Add a title.';return}
+  if(!post.body){$('perr').textContent='Write your question or tip.';return}
+  b.disabled=true; b.textContent='Posting…'; $('perr').textContent='';
+  try{ await LawLink.createPost(post); back(); }
+  catch(e){ if(!authFail(e)) $('perr').textContent=netMsg(e,'post'); }
+  finally{ b.disabled=false; b.textContent='Post'; }
+};
+
+$('rsend').onclick=async function(){
+  var b=$('rsend'), body=$('rb').value.trim();
+  if(!body){$('rerr').textContent='Write a reply first.';return}
+  b.disabled=true; b.textContent='Posting…'; $('rerr').textContent='';
+  try{ await LawLink.reply(cur,body); $('rb').value=''; await refreshThread(); }
+  catch(e){ if(!authFail(e)) $('rerr').textContent=netMsg(e,'post your reply'); }
+  finally{ b.disabled=false; b.textContent='Post reply'; }
+};
+
+$('threadView').addEventListener('click',function(e){
+  var rb=e.target.closest('[data-rid]');
+  if(rb){ twoTap(rb,'Delete',async function(){ try{ await LawLink.deleteReply(rb.dataset.rid); await refreshThread(); }catch(x){ if(!authFail(x)){ rb.disabled=false; rb.textContent='Delete'; $('rerr').textContent=netMsg(x,'delete'); } } }); return; }
+  var dp=e.target.closest('#delpost');
+  if(dp){ twoTap(dp,'Delete post',async function(){ try{ await LawLink.deletePost(cur); back(); }catch(x){ if(!authFail(x)){ dp.disabled=false; dp.textContent='Delete post'; $('rerr').textContent=netMsg(x,'delete'); } } }); }
+});
+
+render(); loadList();
+})();
+</script>
+</body>
+</html>

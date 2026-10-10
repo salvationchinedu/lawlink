@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+
+<div id="listView">
+  <header class="top">
+    <h1>My notes</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+    <button class="ib" id="logout" aria-label="Log out"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M15 8l4 4-4 4M9 12h10"/></svg></button>
+  </header>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Search your notes" aria-label="Search your notes">
+    </label>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by course"></div>
+  <main>
+    <div class="count" id="count" aria-live="polite">Loading notes…</div>
+    <div id="list"></div>
+  </main>
+  <button class="fab" id="add" aria-label="Add note"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+
+<div id="editView" class="hidden">
+  <header class="top">
+    <button class="ib" id="back" aria-label="Back to notes"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 id="editTitle">New note</h1>
+  </header>
+  <main>
+    <label class="f" for="t" style="margin-top:4px">Title</label>
+    <input class="in" id="t" placeholder="e.g. Ratio vs obiter">
+    <div class="row">
+      <div style="flex:1 1 100%"><label class="f" for="cf">Course</label>
+        <input class="in" id="cf" type="search" placeholder="Type to find a course" aria-label="Find a course" style="margin-bottom:6px">
+        <select class="in" id="c" aria-label="Course"></select></div>
+      <div style="flex:1 1 100%"><label class="f" for="p">Topic</label>
+        <input class="in" id="p" list="tl" placeholder="Pick a topic or type your own" autocomplete="off"><datalist id="tl"></datalist></div>
+    </div>
+    <label class="f" for="b">Note</label>
+    <textarea class="in" id="b" placeholder="Write your note here"></textarea>
+    <div class="msg err" id="err" role="alert"></div>
+    <div class="actions">
+      <button class="btn" id="save">Save note</button>
+      <button class="btn ghost" id="del">Delete</button>
+    </div>
+  </main>
+</div>
+
+<nav class="nav" aria-label="Main"><div>
+  <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+  <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+  <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+  <a href="notes.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+  <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+</div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var NAMES=COURSES.map(function(c){return c.name}).sort(function(a,b){return a.localeCompare(b)});
+var CK='lawlink-notes-cache', notes=[], filter='All', editing=null, loaded=false, pre=null;
+var $=function(i){return document.getElementById(i)};
+
+if(!getToken()){ location.replace('login.html'); return; }
+
+// Show saved notes instantly, then refresh from the server.
+try{ var c=JSON.parse(localStorage.getItem(CK)); if(c&&c.length){notes=c;loaded=true} }catch(e){}
+function cache(){ try{localStorage.setItem(CK,JSON.stringify(notes))}catch(e){} }
+
+function ago(ts){var d=Math.floor((Date.now()-ts)/86400000);return d<1?'Edited today':d===1?'Edited yesterday':'Edited '+d+' days ago'}
+function renderChips(){
+  var seen={}, cs=['All'];
+  notes.forEach(function(n){ if(n.course&&!seen[n.course]){seen[n.course]=1;cs.push(n.course)} });
+  cs=['All'].concat(cs.slice(1).sort());
+  if(cs.indexOf(filter)<0)filter='All';
+  $('chips').innerHTML=cs.map(function(c){return '<button class="chip" aria-pressed="'+(c===filter)+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'}).join('');
+}
+function render(){
+  renderChips();
+  var q=$('q').value.trim().toLowerCase();
+  var r=notes.filter(function(n){
+    return (filter==='All'||n.course===filter)&&(!q||(n.title+' '+n.topic+' '+n.body+' '+n.course).toLowerCase().indexOf(q)>-1);
+  }).sort(function(a,b){return b.ts-a.ts});
+  if(loaded) $('count').textContent=r.length+(r.length===1?' note':' notes');
+  if(!r.length){
+    $('list').innerHTML=loaded?'<div class="empty"><h3>'+(notes.length?'No notes match':'No notes yet')+'</h3><p>'+(notes.length?'Try a different word or course.':'Tap + to write your first note.')+'</p></div>':'';
+    return;
+  }
+  $('list').innerHTML=r.map(function(n){
+    return '<button class="note" data-id="'+esc(n.id)+'"><h3>'+esc(n.title||'Untitled note')+'</h3><div class="meta">'+esc(n.course)+(n.topic?', '+esc(n.topic):'')+' · '+ago(n.ts)+'</div><p>'+esc(n.body)+'</p></button>';
+  }).join('');
+}
+function show(edit){$('listView').classList.toggle('hidden',edit);$('editView').classList.toggle('hidden',!edit);window.scrollTo(0,0)}
+function open(id){
+  editing=id; var n=notes.filter(function(x){return x.id===id})[0];
+  $('editTitle').textContent=n?'Edit note':'New note';
+  $('t').value=n?n.title:''; $('p').value=n?n.topic:''; $('b').value=n?n.body:'';
+  $('cf').value='';
+  var want=pre&&pre.course?pre.course:(n?n.course:(filter!=='All'?filter:''));
+  fillCourses(want); fillTopics();
+  if(pre&&pre.topic) $('p').value=pre.topic;
+  pre=null;
+  $('del').classList.toggle('hidden',!n); $('err').textContent=''; show(true);
+}
+function authFail(e){
+  if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html'); return true; }
+  return false;
+}
+
+// Course picker: a search box narrows the list. A course from an older note that is no longer listed is kept.
+function fillCourses(sel){
+  var q=$('cf').value.trim().toLowerCase(), cur=sel!==undefined?sel:$('c').value;
+  var list=NAMES.filter(function(n){return !q||n.toLowerCase().indexOf(q)>-1});
+  if(cur&&list.indexOf(cur)<0&&(!q||cur.toLowerCase().indexOf(q)>-1)) list=[cur].concat(list);
+  $('c').innerHTML='<option value="">No course</option>'+list.map(function(n){return '<option>'+esc(n)+'</option>'}).join('');
+  $('c').value=cur&&list.indexOf(cur)>-1?cur:'';
+}
+function fillTopics(){
+  var c=COURSES.filter(function(x){return x.name===$('c').value})[0], a=[];
+  if(c) c.parts.forEach(function(p){a=a.concat(p.topics)});
+  $('tl').innerHTML=a.map(function(t){return '<option value="'+esc(t)+'">'}).join('');
+}
+$('cf').oninput=function(){fillCourses()};
+$('c').onchange=function(){ $('p').value=''; fillTopics(); };
+$('add').onclick=function(){open(null)};
+$('back').onclick=function(){show(false);render()};
+$('q').oninput=render;
+$('chips').onclick=function(e){var b=e.target.closest('.chip');if(b){filter=b.dataset.c;render()}};
+$('list').onclick=function(e){var b=e.target.closest('.note');if(b)open(b.dataset.id)};
+$('logout').onclick=async function(){ try{await LawLink.logout()}catch(e){} try{localStorage.removeItem(CK)}catch(e){} location.replace('login.html'); };
+
+$('save').onclick=async function(){
+  var d={id:editing,title:$('t').value.trim(),course:$('c').value,topic:$('p').value.trim(),body:$('b').value.trim()};
+  if(!d.title&&!d.body){$('err').textContent='Add a title or some text before saving.';return}
+  var b=$('save'); b.disabled=true; b.textContent='Saving…'; $('err').textContent='';
+  try{
+    var r=await LawLink.saveNote(d);
+    var n={id:r.id,title:d.title,course:d.course,topic:d.topic,body:d.body,ts:r.ts};
+    if(editing) notes=notes.map(function(x){return x.id===editing?n:x}); else notes.push(n);
+    cache(); show(false); render();
+  }catch(e){
+    if(!authFail(e)) $('err').textContent=(e instanceof TypeError)?'Could not save. Check your data and try again.':e.message;
+  }finally{ b.disabled=false; b.textContent='Save note'; }
+};
+
+var armed=false;
+$('del').onclick=async function(){
+  var b=$('del');
+  if(!armed){armed=true;b.textContent='Tap again to delete';setTimeout(function(){armed=false;b.textContent='Delete'},3000);return}
+  armed=false; b.disabled=true; b.textContent='Deleting…';
+  try{
+    await LawLink.deleteNote(editing);
+    notes=notes.filter(function(n){return n.id!==editing}); cache(); show(false); render();
+  }catch(e){
+    if(!authFail(e)) $('err').textContent=(e instanceof TypeError)?'Could not delete. Check your data and try again.':e.message;
+  }finally{ b.disabled=false; b.textContent='Delete'; }
+};
+
+var sp=new URLSearchParams(location.search);
+try{var pq=sp.get('q');if(pq)$('q').value=pq}catch(e){}
+render();
+// Opened from a topic: ?new=1&c=ID&p=PART&i=INDEX starts a note with that course and topic filled in. ?edit=ID opens a note.
+if(sp.get('new')){
+  var pc=COURSES.filter(function(x){return x.id===sp.get('c')})[0];
+  if(pc){ var pt=sp.get('p')!==null&&pc.parts[+sp.get('p')]?pc.parts[+sp.get('p')].topics[+sp.get('i')]:''; pre={course:pc.name,topic:pt||''}; open(null); }
+}else if(sp.get('edit')&&notes.some(function(n){return n.id===sp.get('edit')})){ open(sp.get('edit')); }
+LawLink.listNotes().then(function(list){ notes=list; loaded=true; cache(); render(); if(sp.get('edit')&&!editing&&notes.some(function(n){return n.id===sp.get('edit')})) open(sp.get('edit')); })
+  .catch(function(e){
+    if(authFail(e)) return;
+    loaded=true; $('count').textContent='Offline. Showing your saved notes.'; render();
+  });
+})();
+</script>
+</body>
+</html>

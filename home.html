@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Home</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <h1>Law<span style="color:var(--gold)">Link</span></h1>
+  <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  <a class="ib" href="settings.html" aria-label="Settings" style="text-decoration:none"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></a>
+  <button class="ib" id="logout" aria-label="Log out"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M15 8l4 4-4 4M9 12h10"/></svg></button>
+</header>
+
+<div class="hero">
+  <h1 id="hi">Welcome</h1>
+  <p class="sub" id="lvl">&nbsp;</p>
+  <form class="search" id="sf" role="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input type="search" id="q" placeholder="Search courses, topics and notes" aria-label="Search courses, topics and notes">
+  </form>
+</div>
+
+<main>
+<section style="margin-top:20px">
+  <div class="sh"><h2>Study tools</h2></div>
+  <div class="grid">
+    <a class="tile wide" href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg><strong>Notes</strong><span>Write, search and organise your own notes by course and topic</span></a>
+    <a class="tile" href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg><strong>Courses</strong><span>All courses and their topics</span></a>
+    <div class="tile soon"><svg viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg><strong>Materials</strong><span>Coming soon</span></div>
+    <div class="tile soon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M10 12h6M10 16h6"/></svg><strong>Statutes</strong><span>Coming soon</span></div>
+    <div class="tile soon"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-2 7a3 3 0 0 0 4 0zM19 7l-2 7a3 3 0 0 0 4 0z"/></svg><strong>Cases</strong><span>Coming soon</span></div>
+    <div class="tile soon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 9h6M9 13h4"/></svg><strong>Past questions</strong><span>Coming soon</span></div>
+    <div class="tile soon"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 20V10M12 20V4M17 20v-7"/></svg><strong>Practice judgement</strong><span>Coming soon</span></div>
+  </div>
+</section>
+
+<section id="cont" class="hidden">
+  <div class="sh"><h2>Continue studying</h2><a href="progress.html">My progress</a></div>
+  <div id="contbody"></div>
+</section>
+
+<section>
+  <div class="sh"><h2>Recent notes</h2><a href="notes.html">See all</a></div>
+  <div class="card" id="recent"><div class="empty">Loading…</div></div>
+</section>
+</main>
+
+<nav class="nav" aria-label="Main"><div>
+  <a href="home.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+  <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+  <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+  <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+  <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+</div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)}, UK='lawlink-user', CK='lawlink-notes-cache';
+if(!getToken()){ location.replace('login.html'); return; }
+
+function greet(u){
+  var h=new Date().getHours(), g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  $('hi').textContent=g+', '+String(u.name).split(' ')[0];
+  $('lvl').textContent=(Settings.get().level||u.level)+' Level, Faculty of Law';
+}
+function ago(ts){var d=Math.floor((Date.now()-ts)/86400000);return d<1?'Edited today':d===1?'Edited yesterday':'Edited '+d+' days ago'}
+function recent(list){
+  var r=list.slice().sort(function(a,b){return b.ts-a.ts}).slice(0,3);
+  $('recent').innerHTML=r.length?r.map(function(n){
+    return '<a class="note" href="notes.html"><h3>'+esc(n.title||'Untitled note')+'</h3><div class="meta">'+esc(n.course)+(n.topic?', '+esc(n.topic):'')+' · '+ago(n.ts)+'</div></a>';
+  }).join(''):'<div class="empty"><h3>No notes yet</h3><p>Your latest notes will show up here.</p><a class="btn" href="notes.html">Write a note</a></div>';
+}
+function authFail(e){ if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html'); return true; } return false; }
+
+// Instant render from saved copies, then refresh.
+try{ var u=JSON.parse(localStorage.getItem(UK)); if(u) greet(u); }catch(e){}
+try{ var c=JSON.parse(localStorage.getItem(CK)); if(c) recent(c); }catch(e){}
+
+LawLink.me().then(function(u){ greet(u); try{localStorage.setItem(UK,JSON.stringify(u))}catch(e){} }).catch(authFail);
+LawLink.listNotes().then(function(l){ recent(l); try{localStorage.setItem(CK,JSON.stringify(l))}catch(e){} })
+  .catch(function(e){ if(authFail(e)) return; if($('recent').textContent==='Loading…') $('recent').innerHTML='<div class="empty">Could not load notes. Check your data and try again.</div>'; });
+
+(function(){
+  var P=Prog.get(), html='';
+  if(P.last&&P.last.c){
+    var L=P.last, href='note.html?c='+encodeURIComponent(L.c)+(L.p!==null&&L.p!==undefined?'&p='+L.p+'&i='+L.i:'');
+    html+='<a class="crow" href="'+href+'"><strong>'+esc(L.t)+'</strong><span class="m">'+esc(L.cn)+' · Resume where you stopped</span></a>';
+  }
+  COURSES.filter(function(c){return P.saved[c.id]}).forEach(function(c){
+    var t=0; c.parts.forEach(function(x){t+=x.topics.length});
+    html+='<a class="crow" href="course.html?id='+encodeURIComponent(c.id)+'"><strong>'+esc(c.name)+'</strong><span class="m">'+(t?Prog.doneIn(c.id)+' of '+t+' topics done':'Saved')+'</span></a>';
+  });
+  if(html){ document.getElementById('contbody').innerHTML=html; document.getElementById('cont').classList.remove('hidden'); }
+})();
+$('sf').addEventListener('submit',function(e){ e.preventDefault(); var q=$('q').value.trim(); location.href='search.html'+(q?'?q='+encodeURIComponent(q):''); });
+$('logout').onclick=async function(){
+  if(!LawLink.loggedIn()){ location.href='login.html'; return; }
+  try{await LawLink.logout()}catch(e){} try{localStorage.removeItem(UK)}catch(e){} location.replace('login.html');
+};
+if(!LawLink.loggedIn()){ $('logout').setAttribute('aria-label','Sign in'); }
+// Gentle reminder to back up, shown at most once a month.
+(function(){
+  if(!LawLink.loggedIn()) return;
+  var last=LawLink.lastSync(), hasNotes=false;
+  try{ hasNotes=JSON.parse(localStorage.getItem('lawlink-local')||'{}').notes.length>0 }catch(e){}
+  if((Date.now()-last)>30*86400000 && (hasNotes||Prog.get().last)){
+    var el=document.createElement('a'); el.className='crow'; el.href='settings.html'; el.style.marginTop='16px';
+    el.innerHTML='<strong>Back up your notes</strong><span class="m">'+(last?'Last backup was more than a month ago. Tap to sync.':'You have not backed up yet. Tap to sync.')+'</span>';
+    document.querySelector('main').insertBefore(el,document.querySelector('main').firstChild);
+  }
+})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – About LawLink</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>About LawLink</h1>
+  </header>
+  <main>
+    <section class="sset" style="margin-top:6px"><h2>What LawLink is</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">LawLink is a study space for law students in Nigerian universities. It gives every student the same course list and the same topic notes, so you can study from one source whatever school you attend.</p></section>
+    <section class="sset"><h2>How the notes are written</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">Course and topic notes are written by LawLink and shared with everyone. Students cannot edit them. Your own notes are private and only you can see them. When a note mentions a case, tap its name to open the case page.</p></section>
+    <section class="sset"><h2>Where the courses come from</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">Courses and topics follow the National Universities Commission's Core Curriculum and Minimum Academic Standards for Law, together with faculty curricula. Courses marked ★ are required by the Council of Legal Education for a qualifying degree.</p></section>
+    <section class="sset"><h2>Verified notes</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">A note marked "Verified" has been checked for completeness. Notes without the mark may still be improved.</p></section>
+    <section class="sset"><h2>Please read</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">LawLink notes are study aids. They are not legal advice and do not replace your lecturer, the law reports or the statutes. Before you cite a case or section in an assignment or exam, check it in the original source.</p></section>
+    <section class="sset"><h2>Found a mistake?</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">Open the note and tap Report an error at the bottom. We read every report.</p></section>
+    <section class="sset"><h2>Install the app</h2>
+      <p class="d" style="font-size:16px;color:var(--text)">In your phone's browser menu, choose Add to Home Screen. LawLink then opens like an app, and pages you have already visited load without data.</p></section>
+    <div class="btns" style="margin-top:20px"><a class="btn alt" href="settings.html" style="text-decoration:none">Settings</a></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>if(!getToken()){ location.replace('login.html'); }</script>
+</body>
+</html>

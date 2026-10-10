@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Note</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" id="back" href="courses.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="hd">Note</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <h2 id="ttl" style="font-size:24px;margin:10px 0 0"></h2>
+    <div id="admin" class="hidden"></div>
+    <div id="body"></div>
+    <div id="donebox" class="hidden" style="margin-top:24px"><button class="btn" id="done" style="width:100%"></button></div>
+    <section id="mine" style="margin-top:28px">
+      <div class="gh" style="margin-top:0">My notes<small id="minen"></small></div>
+      <div id="minel"></div>
+      <a class="btn alt" id="newmine" href="notes.html" style="text-decoration:none;margin-top:6px">Write my note</a>
+    </section>
+    <div id="report" class="hidden" style="margin-top:28px">
+      <button class="btn alt" id="rbtn">Report an error</button>
+      <div id="rbox" class="hidden"><label class="f" for="rt">What is wrong?</label><textarea class="in" id="rt" style="min-height:90px"></textarea>
+        <div class="msg" id="rmsg" role="status"></div><button class="btn" id="rsend" style="margin-top:8px">Send report</button></div>
+    </div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+var q=new URLSearchParams(location.search), cid=q.get('c'), p=q.get('p'), ti=q.get('i');
+var c=COURSES.filter(function(x){return x.id===cid})[0];
+var isCourse=p===null, part=c&&!isCourse?c.parts[+p]:null, topic=part?part.topics[+ti]:null;
+if(!c||(!isCourse&&!topic)){ $('ttl').textContent='We could not find that note.'; return; }
+
+var KIND=isCourse?'course':'topic';
+var KEYS=isCourse?['overview','scope','topicmap','authorities','studyguide','exam']
+                 :['intro','principles','statutory','cases','application','exceptions','criticism','summary','exam'];
+var TITLES={intro:'Introduction',principles:'Key principles and rules',statutory:'Statutory basis',cases:'Leading cases',application:'Application and illustrations',exceptions:'Exceptions and limits',criticism:'Criticism and reform',summary:'Summary',exam:'Exam focus',overview:'Overview',scope:'Scope and learning outcomes',topicmap:'How the topics connect',authorities:'Key authorities',studyguide:'Study guide'};
+var NOTE_ID=isCourse?'c:'+c.id:'t:'+c.id+':'+p+':'+ti;
+var TITLE=isCourse?c.name+': course note':topic;
+var all=[]; c.parts.forEach(function(x){all=all.concat(x.topics)});
+var CTX=isCourse?{course:c.name,topics:all}:{course:c.name,part:part.label,topic:topic,siblings:part.topics.filter(function(t){return t!==topic})};
+
+$('hd').textContent=c.name; $('back').href='course.html?id='+encodeURIComponent(c.id);
+$('ttl').textContent=isCourse?'Course note':topic;
+document.title='LawLink – '+TITLE;
+
+Prog.setLast({c:c.id,p:p,i:ti,t:TITLE,cn:c.name});
+if(!isCourse){ var db=document.getElementById('done'); document.getElementById('donebox').classList.remove('hidden');
+  var paint=function(){ db.textContent=Prog.get().done[NOTE_ID]?'Done ✓ (tap to undo)':'Mark topic as done'; };
+  db.onclick=function(){Prog.toggle('done',NOTE_ID);paint()}; paint(); }
+var isAdmin=false, data={note:null,sections:[]}, editing=false, busy=false, armed=false;
+
+function setMsg(t,err){var m=$('amsg'); if(m){m.textContent=t||''; m.className='msg'+(err?' err':'')}}
+function have(){return data.sections.map(function(s){return s.key})}
+
+function render(){
+  var n=data.note, h='';
+  var meta='<span class="pill">by LawLink</span>';
+  if(n&&n.verified) meta+='<span class="pill tip">✓ Verified</span>';
+  if(!isCourse) meta+='<span class="pill">'+esc(part.label.replace(/ \(.*\)/,''))+'</span>';
+  $('meta').innerHTML=meta;
+
+  if(isAdmin) renderAdmin();
+  if(!data.sections.length){
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This note has not been written yet. Please check back soon.</p></div>';
+  }else{
+    data.sections.forEach(function(s){
+      h+='<section class="nsec"><h2>'+esc(s.title)+'</h2>';
+      h+=editing?'<textarea class="in" id="ed-'+s.key+'">'+esc(s.body)+'</textarea><div class="btns"><button class="btn" data-save="'+s.key+'">Save section</button></div>'
+                :'<div class="rich">'+rich(s.body)+'</div>';
+      h+='</section>';
+    });
+  }
+  $('body').innerHTML=h;
+  $('report').classList.toggle('hidden',!data.sections.length||isAdmin);
+}
+
+function renderAdmin(){
+  var n=data.note, missing=KEYS.filter(function(k){return have().indexOf(k)<0});
+  var st=n?(n.status==='complete'?'Complete':'In progress'):'Not generated';
+  var line='Status: '+st+(n?' · Score '+n.score+'%':'')+(n&&n.verified?' · Verified':'');
+  var b='';
+  b+='<button class="btn" data-a="gen">'+(!data.sections.length?'Generate note':missing.length?'Generate missing ('+missing.length+')':'Regenerate all')+'</button>';
+  if(data.sections.length){
+    b+='<button class="btn alt" data-a="check">Check</button>';
+    b+='<button class="btn alt" data-a="verify">Mark verified</button>';
+    if(missing.length) b+='<button class="btn alt" data-a="regen">Regenerate all</button>';
+    b+='<button class="btn alt" data-a="edit">'+(editing?'Done editing':'Edit by hand')+'</button>';
+  }
+  $('admin').classList.remove('hidden');
+  $('admin').innerHTML='<h3>Admin</h3><div>'+esc(line)+'</div><div class="btns">'+b+'</div><div class="prog '+(busy?'':'hidden')+'" id="prog"><i id="pbar"></i></div><div class="msg" id="amsg" role="status"></div>';
+}
+
+async function load(){
+  try{ data=await LawLink.libGet(NOTE_ID,isAdmin); }catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; return; }
+  render();
+}
+
+async function run(keys){
+  busy=true; renderAdmin();
+  for(var k=0;k<keys.length;k++){
+    setMsg('Writing '+(k+1)+' of '+keys.length+': '+TITLES[keys[k]]+'…'); $('pbar').style.width=Math.round(k/keys.length*100)+'%';
+    try{ await LawLink.genSection({noteId:NOTE_ID,kind:KIND,key:keys[k],title:TITLE,context:CTX}); }
+    catch(e){ busy=false; await load(); setMsg('Stopped: '+(e instanceof TypeError?'connection lost. ':'')+e.message+' Tap Generate to continue.',true); return; }
+    try{ data=await LawLink.libGet(NOTE_ID,isAdmin); }catch(e){}
+  }
+  busy=false; await load(); setMsg('Done. Tap Check to confirm it is complete.');
+}
+
+$('admin').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-a]'); if(!b||busy) return; var a=b.dataset.a;
+  if(a==='gen'){ var miss=KEYS.filter(function(k){return have().indexOf(k)<0}); run(miss.length?miss:KEYS); }
+  else if(a==='regen'){ if(!armed){armed=true;b.textContent='Tap again to confirm';setTimeout(function(){armed=false;if(b.isConnected)b.textContent='Regenerate all'},3000);return} armed=false; run(KEYS); }
+  else if(a==='check'){ try{ var r=await LawLink.genCheck(NOTE_ID); await load(); setMsg('Score '+r.score+'%.'+(r.missing.length?' Missing or too short: '+r.missing.join(', ')+'.':' Every section is present.'),r.score<95); }catch(x){ setMsg(x.message,true); } }
+  else if(a==='verify'){ try{ await LawLink.genVerify(NOTE_ID); await load(); setMsg('Marked as verified.'); }catch(x){ setMsg(x.message,true); } }
+  else if(a==='edit'){ editing=!editing; render(); }
+});
+$('body').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-save]'); if(!b) return; var k=b.dataset.save;
+  b.disabled=true; b.textContent='Saving…';
+  try{ await LawLink.genSave({noteId:NOTE_ID,key:k,title:TITLE,body:$('ed-'+k).value}); data=await LawLink.libGet(NOTE_ID,isAdmin); editing=false; render(); setMsg('Saved. Verification was cleared, so tap Check and Mark verified again.'); }
+  catch(x){ b.disabled=false; b.textContent='Save section'; setMsg(x.message,true); }
+});
+
+$('rbtn').onclick=function(){$('rbox').classList.toggle('hidden')};
+$('rsend').onclick=async function(){
+  var t=$('rt').value.trim(); if(!t){$('rmsg').textContent='Describe the problem first.';return}
+  try{ await LawLink.libReport(NOTE_ID,t); $('rt').value=''; $('rmsg').textContent='Thank you. We will review it.'; }
+  catch(x){ $('rmsg').textContent=x.message; }
+};
+
+// Your own notes for this course or topic, with a shortcut to write a new one.
+$('newmine').href='notes.html?new=1&c='+encodeURIComponent(c.id)+(isCourse?'':'&p='+p+'&i='+ti);
+function drawMine(list){
+  var m=list.filter(function(x){return x.course===c.name&&(isCourse||x.topic===topic)}).sort(function(a,b){return b.ts-a.ts});
+  $('minen').textContent=m.length?m.length+(m.length===1?' note':' notes'):'';
+  $('minel').innerHTML=m.length?m.map(function(x){return '<a class="crow" href="notes.html?edit='+encodeURIComponent(x.id)+'"><strong>'+esc(x.title||'Untitled note')+'</strong><span class="m">'+esc(String(x.body||'').replace(/\s+/g,' ').slice(0,90))+'</span></a>'}).join(''):'<p class="legend" style="margin:0 0 8px">You have not written a note here yet.</p>';
+}
+try{ var mc=JSON.parse(localStorage.getItem('lawlink-notes-cache')); if(mc) drawMine(mc); else drawMine([]); }catch(e){ drawMine([]); }
+LawLink.listNotes().then(function(l){ try{localStorage.setItem('lawlink-notes-cache',JSON.stringify(l))}catch(e){} drawMine(l); }).catch(function(){});
+
+LawLink.me().then(function(u){ isAdmin=u.role==='admin'; load(); }).catch(function(){ load(); });
+})();
+</script>
+</body>
+</html>

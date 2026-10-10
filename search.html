@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Search</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Search courses, topics and your notes" aria-label="Search courses, topics and your notes" autofocus>
+    </label>
+  </div>
+  <main>
+    <div class="count" id="count" aria-live="polite"></div>
+    <div id="list"></div>
+  </main>
+
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html" aria-current="page"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+var myNotes=[], MAX=40;
+try{ var cc=JSON.parse(localStorage.getItem('lawlink-notes-cache')); if(cc) myNotes=cc; }catch(e){}
+LawLink.listNotes().then(function(l){ myNotes=l; try{localStorage.setItem('lawlink-notes-cache',JSON.stringify(l))}catch(e){} run(); }).catch(function(){});
+
+function norm(s){return String(s||'').toLowerCase()}
+function words(q){return norm(q).split(/\s+/).filter(Boolean)}
+function hit(text,ws){var t=norm(text);return ws.every(function(w){return t.indexOf(w)>-1})}
+
+// Built once: every topic with its course and position.
+var TOPICS=[];
+COURSES.forEach(function(c){ c.parts.forEach(function(p,pi){ p.topics.forEach(function(t,ti){ TOPICS.push({c:c,pi:pi,ti:ti,t:t,part:p.label.replace(/ \(.*\)/,'')}); }); }); });
+
+function mark(text,ws){
+  var s=esc(text);
+  ws.forEach(function(w){ var e=esc(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); s=s.replace(new RegExp('('+e+')(?![^<]*>)','ig'),'<mark>$1</mark>'); });
+  return s;
+}
+function section(title,n,rows){ return rows.length?'<div class="gh">'+title+'<small>'+n+'</small></div>'+rows.join(''):''; }
+
+function run(){
+  var raw=$('q').value.trim(), ws=words(raw);
+  if(!ws.length){
+    $('count').textContent='';
+    $('list').innerHTML='<div class="empty"><h3>Search LawLink</h3><p>Find any course or topic, or look through your own notes. Try "consideration", "tort" or "bail".</p></div>';
+    return;
+  }
+  var cs=COURSES.filter(function(c){return hit([c.name].concat(c.aliases).join(' '),ws)});
+  var ts=TOPICS.filter(function(x){return hit(x.t,ws)});
+  var ns=myNotes.filter(function(n){return hit([n.title,n.course,n.topic,n.body].join(' '),ws)});
+  var total=cs.length+ts.length+ns.length;
+  $('count').textContent=total+(total===1?' result':' results');
+  if(!total){ $('list').innerHTML='<div class="empty"><h3>Nothing found</h3><p>Check the spelling or try a shorter word.</p></div>'; return; }
+
+  var cr=cs.slice(0,MAX).map(function(c){
+    return '<a class="crow" href="course.html?id='+encodeURIComponent(c.id)+'"><strong>'+mark(c.name,ws)+'</strong><span class="m">Course'+(c.level?' · '+c.level+' Level':'')+'</span></a>';
+  });
+  var tr=ts.slice(0,MAX).map(function(x){
+    return '<a class="crow" href="note.html?c='+encodeURIComponent(x.c.id)+'&p='+x.pi+'&i='+x.ti+'"><strong>'+mark(x.t,ws)+'</strong><span class="m">'+esc(x.c.name)+' · '+esc(x.part)+'</span></a>';
+  });
+  var nr=ns.slice(0,MAX).map(function(n){
+    var snip=norm(n.body).indexOf(ws[0]), body=String(n.body||''), line='';
+    if(snip>-1 && !hit(n.title,ws)){ line='<span class="hit">…'+mark(body.slice(Math.max(0,snip-30),snip+70).replace(/\s+/g,' '),ws)+'…</span>'; }
+    return '<a class="crow" href="notes.html?q='+encodeURIComponent(raw)+'"><strong>'+mark(n.title||'Untitled note',ws)+'</strong><span class="m">Your note'+(n.course?' · '+esc(n.course):'')+'</span>'+line+'</a>';
+  });
+  var more=function(n){return n>MAX?'<p class="legend">Showing the first '+MAX+'. Type more of the word to narrow it down.</p>':''};
+  $('list').innerHTML=section('Courses',cs.length,cr)+more(cs.length)+section('Topics',ts.length,tr)+more(ts.length)+section('Your notes',ns.length,nr)+more(ns.length);
+}
+
+var t=null;
+$('q').addEventListener('input',function(){ clearTimeout(t); t=setTimeout(run,120); });
+var init=new URLSearchParams(location.search).get('q'); if(init) $('q').value=init;
+run();
+})();
+</script>
+</body>
+</html>

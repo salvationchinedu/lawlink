@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Settings</h1>
+  </header>
+  <main>
+    <section class="sset" style="margin-top:6px"><h2>Text size</h2><p class="d">For reading notes.</p>
+      <div class="opt" id="size" role="group" aria-label="Text size">
+        <button data-v="s">Small</button><button data-v="m">Medium</button><button data-v="l">Large</button><button data-v="xl">Extra large</button></div></section>
+    <section class="sset"><h2>Reading mode</h2><p class="d">Serif text, more space between lines and a narrower column, easier on the eyes for long notes.</p>
+      <div class="opt" id="read" role="group" aria-label="Reading mode"><button data-v="normal">Normal</button><button data-v="reading">Reading</button></div></section>
+    <section class="sset"><h2>Theme</h2><p class="d">Automatic follows your phone.</p>
+      <div class="opt" id="theme" role="group" aria-label="Theme"><button data-v="system">Automatic</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></section>
+    <section class="sset"><h2>My level</h2><p class="d">Shown on your home page.</p>
+      <div class="opt" id="level" role="group" aria-label="My level"><button data-v="100">100</button><button data-v="200">200</button><button data-v="300">300</button><button data-v="400">400</button><button data-v="500">500</button></div></section>
+    <div class="sample"><div class="rich"><p><strong>Preview.</strong> A contract is an agreement that the law will enforce. For an agreement to be binding there must be offer, acceptance, consideration and an intention to create legal relations.</p></div></div>
+    <section class="sset"><h2>Account and backup</h2>
+      <p class="d" id="acc"></p>
+      <div class="btns">
+        <a class="btn alt" id="signin" href="login.html?next=settings.html" style="text-decoration:none">Sign in with Google</a>
+        <button class="btn hidden" id="sync">Back up now</button>
+        <button class="btn alt hidden" id="signout">Sign out</button>
+      </div>
+      <div class="msg" id="smsg" role="status"></div></section>
+    <section class="sset"><h2>Saved on this device</h2><p class="d">Your saved courses and topics done are kept on this device. Clearing them cannot be undone.</p>
+      <div class="btns"><button class="btn ghost" id="clear">Clear my progress</button></div><div class="msg" id="msg" role="status"></div></section>
+    <div class="btns" style="margin-top:20px"><a class="btn alt" href="about.html" style="text-decoration:none">About LawLink</a><a class="btn alt" href="progress.html" style="text-decoration:none">My progress</a></div>
+    <p class="legend" style="margin-top:24px">LawLink notes are study aids written by LawLink. They are not legal advice. Check important authorities in the original law reports and statutes.</p>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var KEYS=['size','read','theme','level'];
+function paint(){
+  var s=Settings.get();
+  KEYS.forEach(function(k){
+    var cur=k==='level'&&!s.level?'':s[k];
+    document.querySelectorAll('#'+k+' button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.v===cur)});
+  });
+}
+KEYS.forEach(function(k){ $(k).onclick=function(e){var b=e.target.closest('button'); if(!b) return; Settings.set(k,b.dataset.v); paint(); }; });
+LawLink.me().then(function(u){ if(!Settings.get().level){ document.querySelectorAll('#level button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.v===String(u.level))}); } }).catch(function(){});
+var armed=false;
+$('clear').onclick=function(){
+  var b=$('clear');
+  if(!armed){armed=true;b.textContent='Tap again to clear';setTimeout(function(){armed=false;b.textContent='Clear my progress'},3000);return}
+  armed=false; try{localStorage.removeItem('lawlink-prog')}catch(e){} b.textContent='Clear my progress'; $('msg').textContent='Cleared.';
+};
+function fmt(ts){ return ts?new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'never'; }
+function drawAcct(){
+  var on=LawLink.loggedIn();
+  $('signin').classList.toggle('hidden',on); $('sync').classList.toggle('hidden',!on); $('signout').classList.toggle('hidden',!on);
+  if(on){ LawLink.me().then(function(u){ $('acc').textContent='Signed in as '+u.name+' ('+u.email+'). Your notes and progress are kept on this phone. Tap Back up now to save a copy that follows you to another phone. Last backup: '+fmt(LawLink.lastSync())+'.'; }); }
+  else $('acc').textContent='You are using LawLink without an account. Your notes and progress stay on this phone only. Sign in to back them up, move them to another phone and join Community.';
+}
+$('sync').onclick=async function(){
+  var b=$('sync'); b.disabled=true; b.textContent='Backing up…'; $('smsg').textContent=''; $('smsg').className='msg';
+  try{ var r=await LawLink.sync(); $('smsg').textContent='Done. '+r.notes+(r.notes===1?' note':' notes')+' backed up.'; drawAcct(); }
+  catch(e){ if(/log in|expired/i.test(e.message)){ setToken(null); drawAcct(); }
+    $('smsg').textContent=(e instanceof TypeError)?'Could not back up. Check your data and try again.':e.message; $('smsg').className='msg err'; }
+  finally{ b.disabled=false; b.textContent='Back up now'; }
+};
+$('signout').onclick=async function(){ await LawLink.logout(); drawAcct(); };
+drawAcct();
+paint();
+})();
+</script>
+</body>
+</html>

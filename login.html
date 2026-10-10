@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body class="plain">
+<div class="app">
+  <div class="brand">
+    <div class="logo">Law<b>Link</b></div>
+    <p>Legal research and learning for law students in Nigerian universities.</p>
+  </div>
+  <main class="auth">
+    <h2 style="font-size:22px;margin-top:6px">Sign in</h2>
+    <p style="color:var(--muted);margin:6px 0 18px">Sign in with Google to back up your notes and progress and to join Community. You do not need an account to read notes and courses.</p>
+    <div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
+    <div class="msg err" id="err" role="alert" style="margin-top:12px"></div>
+    <a class="btn alt" href="home.html" style="text-decoration:none;display:block;text-align:center;margin-top:18px">Continue without signing in</a>
+    <p style="font-size:13px;color:var(--muted);margin-top:18px">We only receive your name and email from Google. We never see your Google password.</p>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var next=new URLSearchParams(location.search).get('next');
+  if(!/^[a-z]+\.html$/.test(next||'')) next='home.html';
+
+  if(LawLink.loggedIn()){ location.replace(next); return; }
+
+  function configured(){ return !PREVIEW && GOOGLE_CLIENT_ID.indexOf('PASTE')!==0; }
+  if(!configured()){
+    $('gbtn').innerHTML='';
+    $('err').textContent='Sign-in is not set up yet. You can still use LawLink without an account.';
+    return;
+  }
+
+  async function onCredential(resp){
+    $('err').textContent='';
+    $('gbtn').style.opacity='.5'; $('gbtn').style.pointerEvents='none';
+    try{ await LawLink.googleLogin(resp.credential); location.replace(next); }
+    catch(e){
+      $('gbtn').style.opacity='1'; $('gbtn').style.pointerEvents='auto';
+      $('err').textContent=(e instanceof TypeError)?'Could not sign in. Check your data and try again.':e.message;
+    }
+  }
+  function boot(){
+    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID, callback:onCredential, auto_select:false});
+    google.accounts.id.renderButton($('gbtn'),{theme:'outline',size:'large',text:'continue_with',shape:'pill',width:280});
+  }
+  var s=document.createElement('script');
+  s.src='https://accounts.google.com/gsi/client'; s.async=true; s.defer=true;
+  s.onload=boot;
+  s.onerror=function(){ $('err').textContent='Could not reach Google. Check your data and try again.'; };
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
