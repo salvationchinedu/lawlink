@@ -18,6 +18,7 @@
   <main>
     <div class="cinfo" id="info"></div>
     <a class="crow" id="cnote" href="note.html?c="><strong>Course note</strong><span class="m" id="cnotem">Overview, scope and study guide</span></a>
+    <div class="adm hidden" id="scan"></div>
     <div class="tabs" id="tabs" role="tablist"></div>
     <ol class="topics" id="topics"></ol>
     <div id="empty"></div>
@@ -88,9 +89,31 @@ $('save').onclick=function(){Prog.toggle('saved',c.id);drawProg()};
 $('topics').onclick=function(e){var b=e.target.closest('.chk');if(!b)return;Prog.toggle('done',b.dataset.id);drawTopics()};
 $('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;drawTabs();drawTopics();window.scrollTo(0,0)};
 
+var scanning=false;
+function drawScan(msg,err){
+  var n=Object.keys(ready).length;
+  $('scan').classList.remove('hidden');
+  $('scan').innerHTML='<h3>Admin</h3><div>'+n+' written note'+(n===1?'':'s')+' in this course. Finds statutes, rules and treaties in them and makes them tappable. The wording does not change.</div>'+
+    '<div class="btns"><button class="btn alt" id="scanbtn"'+(scanning||!n?' disabled':'')+'>'+(scanning?'Scanning…':'Scan whole course for authorities')+'</button></div><div class="msg'+(err?' err':'')+'" id="scanmsg" role="status">'+esc(msg||'')+'</div>';
+}
+$('scan').addEventListener('click',async function(e){
+  if(!e.target.closest('#scanbtn')||scanning) return;
+  var ids=Object.keys(ready), linked=0, failed=0, i;
+  scanning=true; drawScan('Starting…');
+  for(i=0;i<ids.length;i++){
+    $('scanmsg').textContent='Scanning note '+(i+1)+' of '+ids.length+'…';
+    try{ var r=await LawLink.scanNote(ids[i]); linked+=r.linked||0; }
+    catch(x){ failed++; if(/log in|expired/i.test(x.message)){ break; } }
+  }
+  scanning=false;
+  drawScan('Done. Linked '+linked+' authorit'+(linked===1?'y':'ies')+' across '+ids.length+' note'+(ids.length===1?'':'s')+'.'+(failed?' '+failed+' note'+(failed===1?'':'s')+' could not be scanned (Gemini may be busy). Tap the button again to retry; finished notes are not changed twice.':''),failed>0);
+});
+var courseAdmin=false;
+LawLink.me().then(function(u){ courseAdmin=u.role==='admin'; if(courseAdmin) drawScan(); }).catch(function(){});
 LawLink.libList(['c:'+c.id,'t:'+c.id+':']).then(function(m){
   ready=m; var cn=m['c:'+c.id]; if(cn&&cn.status==='complete') $('cnotem').innerHTML='<span style="color:var(--sage);font-weight:600">Note ready</span> · Overview, scope and study guide';
   if(c.parts.length) drawTopics();
+  if(courseAdmin&&!scanning) drawScan();
 }).catch(function(){});
 })();
 </script>

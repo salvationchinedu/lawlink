@@ -1,6 +1,6 @@
 // LawLink offline support. Bump VERSION whenever you upload new files so phones pick them up.
-var VERSION = 'lawlink-v6';
-var FILES = ['home.html','courses.html','course.html','note.html','case.html','search.html','settings.html','progress.html','about.html','notes.html','community.html','login.html',
+var VERSION = 'lawlink-v8';
+var FILES = ['home.html','courses.html','course.html','note.html','case.html','authority.html','authorities.html','search.html','settings.html','progress.html','about.html','notes.html','community.html','login.html',
   'style.css','ui.js','api.js','courses-data.js','manifest.json','icon-192.png','icon-512.png'];
 
 self.addEventListener('install', function (e) {

@@ -20,6 +20,13 @@
     s = s.replace(/\{\{c:([a-z0-9-]+)\|([^|}]+)\|([^}]*)\}\}/g, function (m, id, name, cit) {
       return '<a class="auth" href="case.html?id=' + id + '">' + name + '</a>' + (cit ? ' <span class="cit">' + cit + '</span>' : '');
     });
+    // {{a:type:id|Name|Provision}} becomes a tappable link to the shared page for that law.
+    s = s.replace(/\{\{a:([a-z]+):([a-z0-9-]+)\|([^|}]+)\|([^}]*)\}\}/g, function (m, type, id, name, prov) {
+      prov = prov.trim();
+      var href = 'authority.html?id=' + encodeURIComponent('auth:' + type + ':' + id) + (prov ? '&s=' + encodeURIComponent(prov) : '');
+      var extra = prov && name.toLowerCase().indexOf(prov.toLowerCase()) < 0 ? ' <span class="cit">' + prov + '</span>' : '';
+      return '<a class="auth" href="' + href + '">' + name + '</a>' + extra;
+    });
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     return s.split(/\n\s*\n/).map(function (b) {
       var lines = b.split('\n').filter(function (l) { return l.trim(); });

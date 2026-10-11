@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Statute</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="ib" onclick="history.length>1?history.back():location.href='authorities.html'" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 id="hd">Statute</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <h2 id="ttl" style="font-size:24px;margin:10px 0 2px"></h2>
+    <div id="admin" class="hidden"></div>
+    <div id="body"></div>
+    <div id="report" class="hidden" style="margin-top:28px">
+      <button class="btn alt" id="rbtn">Report an error</button>
+      <div id="rbox" class="hidden"><label class="f" for="rt">What is wrong?</label><textarea class="in" id="rt" style="min-height:90px"></textarea>
+        <div class="msg" id="rmsg" role="status"></div><button class="btn" id="rsend" style="margin-top:8px">Send report</button></div>
+    </div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var q=new URLSearchParams(location.search), id=q.get('id')||'', want=q.get('s')||'', isAdmin=false, au=null, armed=false;
+var TYPES={const:'Constitution',act:'Federal Act',state:'State law',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International'};
+
+function norm(x){ return String(x||'').toLowerCase().replace(/sections?/g,'s').replace(/[\s.]+/g,''); }
+function findProv(list){
+  var w=norm(want); if(!w||!list) return null;
+  var exact=list.filter(function(p){return norm(p.ref)===w})[0];
+  if(exact) return exact;
+  return list.filter(function(p){var n=norm(p.ref); return n&&(w.indexOf(n)===0||n.indexOf(w)===0)})[0]||null;
+}
+function sec(h,t){ return t&&String(t).trim()&&t!=='Not confirmed'?'<div class="kv"><h2>'+esc(h)+'</h2><div class="rich">'+rich(t)+'</div></div>':''; }
+function provList(h,list){
+  if(!list||!list.length) return '';
+  return '<div class="kv"><h2>'+esc(h)+'</h2>'+list.map(function(p){
+    return '<div class="rel"><strong>'+esc(p.ref||'')+(p.heading&&p.heading!=='Not confirmed'?': '+esc(p.heading):'')+'</strong>'+(p.summary&&p.summary!=='Not confirmed'?'<div class="rich" style="margin-top:2px">'+rich(p.summary)+'</div>':'')+'</div>';
+  }).join('')+'</div>';
+}
+function noteLink(n){
+  var m=String(n.noteId).split(':'), c=m[1];
+  return '<a class="auth" href="note.html?c='+encodeURIComponent(c)+(m[0]==='t'?'&p='+m[2]+'&i='+m[3]:'')+'">'+esc(n.label)+'</a>'+(n.prov?' <span class="cit">'+esc(n.prov)+'</span>':'');
+}
+function render(){
+  document.title='LawLink – '+au.name;
+  $('hd').textContent=TYPES[au.type]||'Statute';
+  $('ttl').textContent=au.name;
+  var d=au.data, ok=au.status==='generated'||au.status==='verified';
+  var meta='<span class="pill">by LawLink</span>';
+  if(au.status==='verified') meta+='<span class="pill tip">✓ Verified</span>';
+  else if(ok) meta+='<span class="pill">Not yet verified</span>';
+  if(d&&d.jurisdiction&&d.jurisdiction!=='Not confirmed') meta+='<span class="pill">'+esc(d.jurisdiction)+'</span>';
+  if(d&&d.inForce&&d.inForce!=='Not confirmed') meta+='<span class="pill'+(d.inForce==='In force'?' tip':'')+'">'+esc(d.inForce)+'</span>';
+  if(d&&d.year&&d.year!=='Not confirmed') meta+='<span class="pill">'+esc(d.year)+'</span>';
+  $('meta').innerHTML=meta;
+
+  if(isAdmin){
+    var b='<button class="btn" data-a="gen">'+(ok?'Update page':'Generate page')+'</button>';
+    if(ok) b+='<button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark verified')+'</button>';
+    $('admin').classList.remove('hidden');
+    $('admin').innerHTML='<h3>Admin</h3><div>Status: '+esc(au.status==='verified'?'Verified':au.status==='generated'?'Generated, not yet verified':au.status==='unverifiable'?'Could not be verified':'Not generated')+'</div>'+
+      '<div class="also">'+au.provisions.length+' provision'+(au.provisions.length===1?'':'s')+' cited in notes. "Update page" also writes any newly cited provisions.</div>'+
+      '<div class="btns">'+b+'</div><div class="msg" id="amsg" role="status"></div>';
+  }
+  var h='';
+  if(ok&&d){
+    h+='<p class="legend" style="margin:6px 0 0">A study summary written by LawLink. Check the official text before relying on it in an answer or in court.</p>';
+    if(want){
+      var hit=findProv((d.cited||[]).concat(d.keyProvisions||[]));
+      h+='<div class="adm" style="margin-top:14px"><h3>You opened: '+esc(want)+'</h3>'+
+        (hit&&hit.summary&&hit.summary!=='Not confirmed'?'<div class="rich">'+(hit.heading&&hit.heading!=='Not confirmed'?'<p><strong>'+esc(hit.heading)+'</strong></p>':'')+rich(hit.summary)+'</div>':
+         '<div>A summary of this provision has not been written yet.'+(isAdmin?' Tap "Update page" to add it.':'')+'</div>')+'</div>';
+    }
+    h+=sec('Overview',d.overview)+sec('Purpose and scope',d.purpose);
+    h+=provList('Key provisions',d.keyProvisions);
+    h+=provList('Provisions cited in LawLink',d.cited);
+    if(d.cases&&d.cases.length) h+='<div class="kv"><h2>Cases that apply it</h2>'+d.cases.map(function(c){return '<div class="rel"><strong>'+esc(c.name||'')+'</strong> <span class="cit">'+esc(c.citation||'')+'</span><div class="rich" style="margin-top:2px">'+rich(c.point||'')+'</div></div>'}).join('')+'</div>';
+    h+=sec('Amendments and current status',d.amendments)+sec('Exam focus',d.examFocus)+sec('Sample question',d.sampleQuestion);
+  }else if(au.status==='unverifiable'){
+    h='<div class="soonbox"><h3>This could not be verified</h3><p>We could not confirm this law, so no page was created. It may have been cited with the wrong name.</p></div>';
+  }else{
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This page has not been written yet. Please check back soon.</p></div>';
+    if(want) h+='<p class="legend">You opened: '+esc(want)+'</p>';
+  }
+  if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
+  $('body').innerHTML=h;
+  $('report').classList.toggle('hidden',!ok||isAdmin);
+}
+async function load(fresh){
+  try{ au=await LawLink.getAuth(id,fresh); render(); }
+  catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('ttl').textContent='Not found'; $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; }
+}
+$('admin').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-a]'); if(!b) return; var a=b.dataset.a, m=$('amsg');
+  if(a==='gen'){
+    b.disabled=true; b.textContent='Writing…'; m.className='msg'; m.textContent='This can take up to a minute.';
+    try{ au=await LawLink.genAuth(id); render(); $('amsg').textContent='Done.'; }
+    catch(x){ b.disabled=false; b.textContent='Generate page'; m.textContent=x.message+' Tap again to retry.'; m.className='msg err'; }
+  }else if(a==='verify'){
+    try{ au=await LawLink.authVerify(id,au.status!=='verified'); render(); $('amsg').textContent=au.status==='verified'?'Marked as verified.':'Verification removed.'; }
+    catch(x){ m.textContent=x.message; m.className='msg err'; }
+  }
+});
+$('rbtn').onclick=function(){$('rbox').classList.toggle('hidden')};
+$('rsend').onclick=async function(){
+  var t=$('rt').value.trim(); if(!t){$('rmsg').textContent='Describe the problem first.';return}
+  try{ await LawLink.libReport(id,t); $('rt').value=''; $('rmsg').textContent='Thank you. We will review it.'; }
+  catch(x){ $('rmsg').textContent=x.message; }
+};
+LawLink.me().then(function(u){isAdmin=u.role==='admin'; load(isAdmin)}).catch(function(){load(false)});
+})();
+</script>
+</body>
+</html>

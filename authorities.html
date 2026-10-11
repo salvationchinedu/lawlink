@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Statutes</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="hd">Statutes</h1>
+    <button class="ib" onclick="toggleTheme()" aria-label="Switch light or dark mode"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+  </header>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Search" aria-label="Search">
+    </label>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by type"></div>
+  <main>
+    <div class="count" id="count" aria-live="polite">Loading…</div>
+    <div id="list"></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var kind=new URLSearchParams(location.search).get('k')==='cases'?'case':'auth', isAdmin=false, all=[], filter='all', loaded=false;
+var TYPES={const:'Constitution',act:'Federal Acts',state:'State laws',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International'};
+var ST={cited:'Not written yet',generated:'Ready',verified:'✓ Verified',unverifiable:'Could not be verified'};
+var NOUN=kind==='case'?'case':'law';
+$('hd').textContent=kind==='case'?'Cases':'Statutes';
+document.title='LawLink – '+$('hd').textContent;
+$('q').placeholder=kind==='case'?'Search cases':'Search statutes, rules and treaties';
+
+function visible(){ return all.filter(function(x){ return isAdmin||x.status==='generated'||x.status==='verified'; }); }
+function render(){
+  var list=visible(), q=$('q').value.trim().toLowerCase();
+  if(kind!=='case'){
+    var seen={}, chips=[['all','All']];
+    list.forEach(function(x){ if(!seen[x.type]&&TYPES[x.type]){seen[x.type]=1; chips.push([x.type,TYPES[x.type]]);} });
+    if(chips.every(function(c){return c[0]!==filter})) filter='all';
+    $('chips').innerHTML=chips.map(function(c){return '<button class="chip" aria-pressed="'+(c[0]===filter)+'" data-t="'+c[0]+'">'+esc(c[1])+'</button>'}).join('');
+  }else $('chips').classList.add('hidden');
+  var r=list.filter(function(x){ return (filter==='all'||x.type===filter)&&(!q||x.name.toLowerCase().indexOf(q)>-1); });
+  if(loaded) $('count').textContent=r.length+(r.length===1?' '+NOUN:' '+(kind==='case'?'cases':'laws'));
+  if(!r.length){
+    $('list').innerHTML=loaded?'<div class="empty"><h3>'+(list.length?'Nothing matches':'Nothing here yet')+'</h3><p>'+(list.length?'Try a different word.':(kind==='case'?'Cases appear here after they have been written up.':'Pages appear here after they have been written up.'))+'</p></div>':'';
+    return;
+  }
+  $('list').innerHTML=r.map(function(x){
+    var href=(kind==='case'?'case.html?id=':'authority.html?id=')+encodeURIComponent(x.id);
+    var tag=kind==='case'?'':(TYPES[x.type]||'');
+    var st=isAdmin||x.status==='verified'?ST[x.status]||'':'';
+    return '<a class="crow" href="'+href+'"><strong>'+esc(x.name)+'</strong><span class="m">'+esc([tag,st].filter(Boolean).join(' · '))+'</span></a>';
+  }).join('');
+}
+$('q').oninput=render;
+$('chips').onclick=function(e){var b=e.target.closest('.chip'); if(b){filter=b.dataset.t; render();}};
+LawLink.me().then(function(u){isAdmin=u.role==='admin'}).catch(function(){}).then(function(){
+  return LawLink.listAuth(kind).then(function(l){all=l||[]; loaded=true; render();}).catch(function(e){loaded=true; $('count').textContent=(e instanceof TypeError)?'Offline. Could not load the list.':e.message; render();});
+});
+})();
+</script>
+</body>
+</html>

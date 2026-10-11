@@ -104,6 +104,7 @@ function renderAdmin(){
   b+='<button class="btn" data-a="gen">'+(!data.sections.length?'Generate note':missing.length?'Generate missing ('+missing.length+')':'Regenerate all')+'</button>';
   if(data.sections.length){
     b+='<button class="btn alt" data-a="check">Check</button>';
+    b+='<button class="btn alt" data-a="scan">Find authorities</button>';
     b+='<button class="btn alt" data-a="verify">Mark verified</button>';
     if(missing.length) b+='<button class="btn alt" data-a="regen">Regenerate all</button>';
     b+='<button class="btn alt" data-a="edit">'+(editing?'Done editing':'Edit by hand')+'</button>';
@@ -134,6 +135,7 @@ $('admin').addEventListener('click',async function(e){
   else if(a==='regen'){ if(!armed){armed=true;b.textContent='Tap again to confirm';setTimeout(function(){armed=false;if(b.isConnected)b.textContent='Regenerate all'},3000);return} armed=false; run(KEYS); }
   else if(a==='check'){ try{ var r=await LawLink.genCheck(NOTE_ID); await load(); setMsg('Score '+r.score+'%.'+(r.missing.length?' Missing or too short: '+r.missing.join(', ')+'.':' Every section is present.'),r.score<95); }catch(x){ setMsg(x.message,true); } }
   else if(a==='verify'){ try{ await LawLink.genVerify(NOTE_ID); await load(); setMsg('Marked as verified.'); }catch(x){ setMsg(x.message,true); } }
+  else if(a==='scan'){ b.disabled=true; setMsg('Reading the note for statutes and rules… this can take up to a minute.'); try{ var r=await LawLink.scanNote(NOTE_ID); data=await LawLink.libGet(NOTE_ID,true); render(); setMsg(r.linked?'Linked '+r.linked+' authorit'+(r.linked===1?'y':'ies')+' in '+r.sections+' section'+(r.sections===1?'':'s')+'. The wording did not change.':'No new statutes or rules found to link.'); }catch(x){ b.disabled=false; setMsg(x.message,true); } }
   else if(a==='edit'){ editing=!editing; render(); }
 });
 $('body').addEventListener('click',async function(e){

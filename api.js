@@ -26,7 +26,7 @@ function getToken() { return loggedIn() ? readToken() : 'guest'; }
 function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
 function myLevel() { try { return (window.Settings && Settings.get().level) || '100'; } catch (e) { return '100'; } }
 
-var PUBLIC_ACTIONS = { 'lib.get': 1, 'lib.list': 1, 'case.get': 1, 'auth.google': 1 };
+var PUBLIC_ACTIONS = { 'lib.get': 1, 'lib.list': 1, 'case.get': 1, 'auth.get': 1, 'auth.list': 1, 'auth.google': 1 };
 
 async function net(action, payload) {
   var body = Object.assign({ action: action, token: loggedIn() ? readToken() : '' }, payload || {});
@@ -187,6 +187,23 @@ var LawLink = {
     } catch (e) { if (c) return c.v; throw e; }
   },
 
+  // Statutes, rules, the Constitution and treaties (one shared page each)
+  async getAuth(id, fresh) {
+    var key = 'lawlink-auth:' + id, c = cacheGet(key);
+    if (!fresh && c && Date.now() - c.t < LIBC_TTL) return c.v;
+    try { var v = await call('auth.get', { id: id }); if (v && v.data) cachePut(key, v); return v; }
+    catch (e) { if (c && !fresh) return c.v; throw e; }
+  },
+  async listAuth(kind) {
+    var key = 'lawlink-authl:' + kind, c = cacheGet(key);
+    if (c && Date.now() - c.t < 600000) return c.v;
+    try { var v = await call('auth.list', { kind: kind }); cachePut(key, v); return v; }
+    catch (e) { if (c) return c.v; throw e; }
+  },
+  genAuth: function (id) { return call('gen.auth', { id: id }); },
+  authVerify: function (id, on) { return call('gen.authVerify', { id: id, on: on }); },
+  scanNote: function (noteId) { return call('gen.scan', { noteId: noteId }); },
+
   genSection: function (o) { return call('gen.section', o); },
   genCheck: function (noteId) { return call('gen.check', { noteId: noteId }); },
   genVerify: function (noteId) { return call('gen.verify', { noteId: noteId }); },
@@ -236,6 +253,8 @@ async function demoCall(action, p) {
     case 'lib.list': return {};
     case 'lib.report': return {};
     case 'case.get': throw new Error('Cases are not available in preview mode.');
+    case 'auth.get': throw new Error('Not available in preview mode.');
+    case 'auth.list': return [];
     default: throw new Error('Not available in preview mode.');
   }
 }
