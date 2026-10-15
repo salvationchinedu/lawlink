@@ -1,0 +1,44 @@
+node_modules
+.wrangler
+.dev.vars
+
+CREATE TABLE IF NOT EXISTS users ( id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at INTEGER NOT NULL ); CREATE TABLE IF NOT EXISTS sync ( user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL ); CREATE TABLE IF NOT EXISTS posts ( id TEXT PRIMARY KEY, user_id TEXT NOT NULL, author TEXT NOT NULL, level TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, course TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, body TEXT NOT NULL, replies INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL ); CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at); CREATE TABLE IF NOT EXISTS replies ( id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, author TEXT NOT NULL, level TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, created_at INTEGER NOT NULL ); CREATE INDEX IF NOT EXISTS idx_replies_post ON replies(post_id, created_at); CREATE TABLE IF NOT EXISTS lib_notes ( note_id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'generating', score INTEGER NOT NULL DEFAULT 0, verified INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL ); CREATE TABLE IF NOT EXISTS lib_sections ( note_id TEXT NOT NULL, key TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (note_id, key) ); CREATE TABLE IF NOT EXISTS cases ( case_id TEXT PRIMARY KEY, name TEXT NOT NULL, citation TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'cited', data TEXT NOT NULL DEFAULT '', cited_in TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL ); CREATE TABLE IF NOT EXISTS reports ( id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT NOT NULL, created_at INTEGER NOT NULL ); CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
+
+{
+  "name": "lawlink",
+  "private": true,
+  "scripts": { "deploy": "wrangler deploy" },
+  "devDependencies": { "wrangler": "^4" }
+}
+
+{
+  // One Cloudflare project: the website (public folder) and the API (src/index.js) share one address.
+  "name": "lawlink",
+  "main": "src/index.js",
+  "compatibility_date": "2025-01-01",
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": ["/", "/api", "/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lawlink-db",
+      // Paste the Database ID from Cloudflare: Storage and databases > D1 > lawlink-db. Keep the quotes.
+      "database_id": "PASTE_YOUR_DATABASE_ID_HERE"
+    }
+  ],
+
+  "vars": {
+    "GOOGLE_CLIENT_ID": "744868327622-ekqpnaelfic62m4dto9g3u7al0lqvfkf.apps.googleusercontent.com",
+    "ADMIN_EMAILS": "salvation4chinedu@gmail.com",
+    "ALLOWED_ORIGINS": "",
+    "GEMINI_MODEL": "gemini-3.6-flash",
+    "COMMUNITY_ENABLED": "true"
+  }
+  // Secrets (SESSION_SECRET and GEMINI_KEY) are NOT stored here. You add them in the Cloudflare dashboard.
+}
