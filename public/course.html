@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Course</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="courses.html" aria-label="Back to courses" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="title">Course</h1>
+  </header>
+  <main>
+    <div class="cinfo" id="info"></div>
+    <a class="crow" id="cnote" href="note.html?c="><strong>Course note</strong><span class="m" id="cnotem">Overview, scope and study guide</span></a>
+    <div class="adm hidden" id="scan"></div>
+    <div class="adm hidden" id="edit"></div>
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <ol class="topics" id="topics"></ol>
+    <div id="empty"></div>
+  </main>
+
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+var id=new URLSearchParams(location.search).get('id');
+var c=COURSES.filter(function(x){return x.id===id})[0];
+if(!c){
+  $('title').textContent='Course not found';
+  $('empty').innerHTML='<div class="soonbox"><h3>We could not find that course</h3><p><a href="courses.html" class="btn" style="text-decoration:none;margin-top:12px">Back to courses</a></p></div>';
+  return;
+}
+document.title='LawLink – '+c.name;
+$('cnote').href='note.html?c='+encodeURIComponent(c.id);
+$('title').textContent=c.name;
+
+var info='';
+if(c.cle===2) info+='<span class="pill tip">★ CLE required</span>'; else if(c.cle===1) info+='<span class="pill">† Listed by some sources</span>';
+if(c.aliases.length) info+='<div class="also">Also called: '+c.aliases.map(esc).join(', ')+'</div>';
+info+='<div class="legend" style="margin:10px 0 4px">My category (only you see this)</div><div id="mytag" class="tagrow" role="group" aria-label="My category"></div>';
+info+='<div class="btns" style="margin-top:10px;align-items:center"><button class="btn alt" id="save">Save course</button><span class="msg" id="prog" style="margin:0"></span></div>';
+$('info').innerHTML=info;
+
+function drawTag(){
+  var cur=Prog.tag(c.id);
+  $('mytag').innerHTML=[['core','Core'],['elective','Elective'],['general','General']].map(function(o){return '<button class="chip" data-t="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>'}).join('');
+}
+$('mytag').onclick=function(e){var b=e.target.closest('.chip'); if(!b) return; Prog.setTag(c.id, Prog.tag(c.id)===b.dataset.t?'':b.dataset.t); drawTag();};
+drawTag();
+var cur=0;
+function drawTabs(){
+  if(c.parts.length<2){ $('tabs').classList.add('hidden'); return; }
+  $('tabs').innerHTML=c.parts.map(function(p,i){return '<button role="tab" data-i="'+i+'" aria-selected="'+(i===cur)+'">'+esc(p.label.replace(/ \(.*\)/,''))+'</button>'}).join('');
+}
+var ready={};
+function total(){var n=0;c.parts.forEach(function(x){n+=x.topics.length});return n}
+function drawProg(){
+  var d=Prog.doneIn(c.id), t=total(), sv=!!Prog.get().saved[c.id];
+  $('save').textContent=sv?'Saved ✓':'Save course';
+  $('prog').textContent=t?d+' of '+t+' topics done':'';
+}
+function drawTopics(){
+  var p=c.parts[cur], P=Prog.get();
+  $('topics').innerHTML=p.topics.map(function(t,i){
+    var nid='t:'+c.id+':'+cur+':'+i, ok=ready[nid]&&ready[nid].status==='complete', dn=!!P.done[nid];
+    return '<li class="topic" style="display:flex;align-items:center"><a href="note.html?c='+encodeURIComponent(c.id)+'&p='+cur+'&i='+i+'" style="flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;padding:13px 0 13px 16px;text-decoration:none;color:var(--text)"><span class="n">'+(i+1)+'</span><span class="t">'+esc(t)+(ok?' <span style="color:var(--sage);font-size:13px;font-weight:600">· Note ready</span>':'')+'</span></a><button class="chk" data-id="'+nid+'" aria-pressed="'+dn+'" aria-label="Mark topic '+(i+1)+' as done" style="flex:none;width:48px;height:48px;border:0;background:none;color:'+(dn?'var(--sage)':'var(--muted)')+';cursor:pointer;font-size:22px">'+(dn?'✓':'○')+'</button></li>';
+  }).join('');
+  drawProg();
+}
+if(!c.parts.length){
+  $('empty').innerHTML='<div class="soonbox"><h3>Topics coming soon</h3><p>We have not found a published list of topics for this course yet. They will be added by specialists.</p></div>';
+}else{
+  drawTabs(); drawTopics();
+}
+if(!c.parts.length) drawProg();
+$('save').onclick=function(){Prog.toggle('saved',c.id);drawProg()};
+$('topics').onclick=function(e){var b=e.target.closest('.chk');if(!b)return;Prog.toggle('done',b.dataset.id);drawTopics()};
+$('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;drawTabs();drawTopics();window.scrollTo(0,0)};
+
+var scanning=false;
+function drawScan(msg,err){
+  var n=Object.keys(ready).length;
+  $('scan').classList.remove('hidden');
+  $('scan').innerHTML='<h3>Admin</h3><div>'+n+' written note'+(n===1?'':'s')+' in this course. Finds statutes, rules and treaties in them and makes them tappable. The wording does not change.</div>'+
+    '<div class="btns"><button class="btn alt" id="scanbtn"'+(scanning||!n?' disabled':'')+'>'+(scanning?'Scanning…':'Scan whole course for authorities')+'</button></div><div class="msg'+(err?' err':'')+'" id="scanmsg" role="status">'+esc(msg||'')+'</div>';
+}
+$('scan').addEventListener('click',async function(e){
+  if(!e.target.closest('#scanbtn')||scanning) return;
+  var ids=Object.keys(ready), linked=0, failed=0, i;
+  scanning=true; drawScan('Starting…');
+  for(i=0;i<ids.length;i++){
+    $('scanmsg').textContent='Scanning note '+(i+1)+' of '+ids.length+'…';
+    try{ var r=await LawLink.scanNote(ids[i]); linked+=r.linked||0; }
+    catch(x){ failed++; if(/log in|expired/i.test(x.message)){ break; } }
+  }
+  scanning=false;
+  drawScan('Done. Linked '+linked+' authorit'+(linked===1?'y':'ies')+' across '+ids.length+' note'+(ids.length===1?'':'s')+'.'+(failed?' '+failed+' note'+(failed===1?'':'s')+' could not be scanned (Gemini may be busy). Tap the button again to retry; finished notes are not changed twice.':''),failed>0);
+});
+var courseAdmin=false;
+function editForm(){
+  var h='<label class="f" for="en">Course name</label><input class="in" id="en" maxlength="120" value="'+esc(c.name)+'">'+
+    '<label class="f" for="ea">Other names (separated by commas)</label><input class="in" id="ea" maxlength="300" value="'+esc((c.aliases||[]).join(', '))+'">';
+  c.parts.concat([{label:'',topics:[],isNew:true}]).forEach(function(p,i){
+    h+='<div class="kv" style="margin-top:12px"><label class="f">'+(p.isNew?'Add a new part (optional)':'Part name')+'</label><input class="in" data-pl="'+i+'" maxlength="60" value="'+esc(p.label)+'" placeholder="e.g. Part III">'+
+      '<label class="f">Topics, one per line'+(p.isNew?'':' (add at the end, or fix wording)')+'</label><textarea class="in" data-pt="'+i+'" rows="'+Math.min(14,Math.max(4,p.topics.length+2))+'">'+esc(p.topics.join('\n'))+'</textarea></div>';
+  });
+  h+='<div class="legend" style="margin:8px 0">Notes are attached to a topic by its position. You can add topics at the end or correct wording, but not remove or reorder topics that already have notes.</div>'+
+    '<div class="btns" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-e="save">Save changes</button><button class="btn alt" data-e="hide">Hide this course</button></div>';
+  $('eform').innerHTML=h;
+}
+document.addEventListener('click',async function(e){
+  var b=e.target.closest('[data-e]'); if(!b) return; var a=b.dataset.e, m=$('emsg');
+  if(a==='open'){ $('eform').classList.toggle('hidden'); if(!$('eform').innerHTML) editForm(); return; }
+  if(a==='hide'){
+    if(!confirm('Hide this course from everyone? You can restore it from the Courses page.')) return;
+    b.disabled=true;
+    try{ await LawLink.courseHide(c.id,c.name,true); try{sessionStorage.removeItem('lawlink-creload')}catch(x){} await window.refreshCourses(true); location.href='courses.html'; }catch(x){ b.disabled=false; m.textContent=x.message; m.className='msg err'; }
+    return;
+  }
+  if(a==='save'){
+    var parts=[], i, bad='';
+    c.parts.concat([{isNew:true}]).forEach(function(p,i){
+      var lab=document.querySelector('[data-pl="'+i+'"]').value.trim(), tp=document.querySelector('[data-pt="'+i+'"]').value.split('\n').map(function(x){return x.trim()}).filter(Boolean);
+      if(p.isNew){ if(tp.length) parts.push({label:lab||'More topics',topics:tp}); return; }
+      if(tp.length<p.topics.length&&Object.keys(ready).length) bad=p.label||'a part';
+      parts.push({label:lab||p.label,topics:tp});
+    });
+    if(bad){ m.textContent='Topics cannot be removed from '+bad+' because notes may be attached. Add topics or fix wording only.'; m.className='msg err'; return; }
+    var course={id:c.id,name:$('en').value.trim(),aliases:$('ea').value.split(',').map(function(x){return x.trim()}).filter(Boolean),group:c.group,cle:c.cle,parts:parts};
+    b.disabled=true; m.textContent='Saving…'; m.className='msg';
+    try{ await LawLink.courseSave(course); try{sessionStorage.removeItem('lawlink-creload')}catch(x){} await window.refreshCourses(true); location.reload(); }catch(x){ b.disabled=false; m.textContent=x.message; m.className='msg err'; }
+  }
+});
+function drawEdit(){
+  $('edit').classList.remove('hidden');
+  if(!$('emsg')) $('edit').innerHTML='<h3>Admin: edit course</h3><div class="btns"><button class="btn alt" data-e="open">Edit course, topics or hide</button></div><div id="eform" class="hidden"></div><div class="msg" id="emsg" role="status"></div>';
+}
+LawLink.me().then(function(u){ courseAdmin=u.role==='admin'; if(courseAdmin){ drawScan(); drawEdit(); } }).catch(function(){});
+LawLink.libList(['c:'+c.id,'t:'+c.id+':']).then(function(m){
+  ready=m; var cn=m['c:'+c.id]; if(cn&&cn.status==='complete') $('cnotem').innerHTML='<span style="color:var(--sage);font-weight:600">Note ready</span> · Overview, scope and study guide';
+  if(c.parts.length) drawTopics();
+  if(courseAdmin&&!scanning) drawScan();
+}).catch(function(){});
+})();
+</script>
+</body>
+</html>

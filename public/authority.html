@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Statute</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="ib" onclick="history.length>1?history.back():location.href='authorities.html'" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 id="hd">Statute</h1>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <h2 id="ttl" style="font-size:24px;margin:10px 0 2px"></h2>
+    <div id="admin" class="hidden"></div>
+    <div id="body"></div>
+    <div id="report" class="hidden" style="margin-top:28px">
+      <button class="btn alt" id="rbtn">Report an error</button>
+      <div id="rbox" class="hidden"><label class="f" for="rt">What is wrong?</label><textarea class="in" id="rt" style="min-height:90px"></textarea>
+        <div class="msg" id="rmsg" role="status"></div><button class="btn" id="rsend" style="margin-top:8px">Send report</button></div>
+    </div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var q=new URLSearchParams(location.search), id=q.get('id')||'', want=q.get('s')||'', isAdmin=false, au=null, busy=false;
+var TYPES={const:'Constitution',act:'Federal Act',state:'State law',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International'};
+var wantP=parseProv(want);
+
+function sec(h,t){ return t&&String(t).trim()&&t!=='Not confirmed'?'<div class="kv"><h2>'+esc(h)+'</h2><div class="rich">'+rich(t)+'</div></div>':''; }
+function noteLink(n){
+  var m=String(n.noteId).split(':'), c=m[1];
+  return '<a class="auth" href="note.html?c='+encodeURIComponent(c)+(m[0]==='t'?'&p='+m[2]+'&i='+m[3]:'')+'">'+esc(n.label)+'</a>'+(n.prov?' <span class="cit">'+esc(n.prov)+'</span>':'');
+}
+function pills(ok){
+  var d=au.data, m='<span class="pill">by LawLink</span>';
+  if(au.status==='verified') m+='<span class="pill tip">✓ Verified</span>';
+  else if(ok) m+='<span class="pill">Not yet verified</span>';
+  if(au.kind!=='section'&&d){
+    if(d.jurisdiction&&d.jurisdiction!=='Not confirmed') m+='<span class="pill">'+esc(d.jurisdiction)+'</span>';
+    if(d.inForce&&d.inForce!=='Not confirmed') m+='<span class="pill'+(d.inForce==='In force'?' tip':'')+'">'+esc(d.inForce)+'</span>';
+    if(d.year&&d.year!=='Not confirmed') m+='<span class="pill">'+esc(d.year)+'</span>';
+  }
+  return m;
+}
+function statusText(){ return au.status==='verified'?'Verified':au.status==='generated'?'Written, not yet verified':au.status==='unverifiable'?'Could not be verified':'Not written yet'; }
+function norm(x){ return String(x||'').toLowerCase().replace(/\s+/g,''); }
+// Which listed subsection matches what the note cited, e.g. cited (2)(a) -> listed (2)
+function subHit(subs){
+  if(!wantP||!wantP.sub||!subs) return -1;
+  var w=norm(wantP.sub), i;
+  for(i=0;i<subs.length;i++) if(norm(subs[i].ref)===w) return i;
+  var parts=w.match(/\([^)]*\)/g)||[];
+  while(parts.length>1){ parts.pop(); var t=parts.join(''); for(i=0;i<subs.length;i++) if(norm(subs[i].ref)===t) return i; }
+  return -1;
+}
+function renderSection(){
+  var d=au.data, ok=au.status==='generated'||au.status==='verified';
+  var lawLink=au.law?'<a class="auth" href="authority.html?id='+encodeURIComponent(au.law.id)+'">'+esc(au.law.name)+'</a>':'';
+  $('hd').textContent=au.label||'Provision';
+  $('ttl').textContent=au.label+(d&&d.heading?' – '+d.heading:'');
+  $('meta').innerHTML=pills(ok)+(lawLink?'<span class="pill" style="background:none;border:0;padding-left:0">of '+lawLink+'</span>':'');
+  document.title='LawLink – '+au.name;
+  if(isAdmin){
+    var b='<button class="btn" data-a="gen">'+(ok?'Write again':'Write this section')+'</button>';
+    if(ok) b+='<button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark verified')+'</button>';
+    $('admin').classList.remove('hidden');
+    $('admin').innerHTML='<h3>Admin</h3><div>Status: '+esc(statusText())+'</div>'+(ok?'<div class="also">Writing it again clears the Verified mark.</div>':'')+'<div class="btns">'+b+'</div><div class="msg" id="amsg" role="status"></div>';
+  }
+  var h='';
+  if(ok&&d&&d.official){
+    h+='<div class="kv"><h2>Official text</h2><div class="rich">'+(d.text?'<p style="white-space:pre-wrap">'+esc(d.text)+'</p>':'')+(d.subs||[]).map(function(s){return s.h?'<h3 style="margin:18px 0 6px;font-size:1.02em">'+esc(s.ref)+'</h3>':'<p style="white-space:pre-wrap"><strong>'+esc(s.ref)+'</strong> '+esc(s.text)+'</p>'}).join('')+'</div><p class="legend" style="margin:8px 0 0">From the official text of the law. Always check the latest amended version.</p></div>';
+  }
+  if(ok&&d&&(d.summary||!d.official)){
+    h+='<p class="legend" style="margin:6px 0 0">A short explanation written by LawLink. Check the official text before relying on it in an answer or in court.</p>';
+    var hit=subHit(d.subsections);
+    if(wantP&&wantP.sub){
+      h+='<div class="adm" style="margin-top:14px"><h3>You opened: '+esc(au.label+wantP.sub)+'</h3>'+
+        (hit>-1?'<div class="rich"><p><strong>'+esc(d.subsections[hit].ref)+'</strong> '+esc(d.subsections[hit].point)+'</p></div>':'<div>This part is not summarised here. See the full explanation below and the official text.</div>')+'</div>';
+    }
+    h+=sec('What it says',d.summary);
+    if(d.subsections&&d.subsections.length){
+      h+='<div class="kv"><h2>Subsections</h2>'+d.subsections.map(function(s,i){return '<div class="rel'+(i===hit?' hl':'')+'"><span class="ref">'+esc(s.ref)+'</span> '+esc(s.point)+'</div>'}).join('')+
+        (d.subsectionsComplete?'':'<p class="legend" style="margin:8px 0 0">Not every subsection is listed. See the official text for the rest.</p>')+'</div>';
+    }
+    h+=sec('Exam tip',d.examTip);
+  }else if(ok&&d){ /* official text only */ }
+  else if(au.status==='unverifiable'){
+    h='<div class="soonbox"><h3>This could not be verified</h3><p>We could not confirm this provision, so no entry was written. It may have been cited with the wrong number.</p></div>';
+  }else{
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This section has not been written yet. Please check back soon.</p></div>';
+    if(want) h+='<p class="legend">You opened: '+esc(want)+'</p>';
+  }
+  if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
+  $('body').innerHTML=h;
+  $('report').classList.toggle('hidden',!ok||isAdmin);
+}
+function inG(k,g){
+  var a=g.from,b=g.to;
+  if(/^\d+$/.test(a)){ var n=parseInt(k,10); return /^\d/.test(k)&&n>=+a&&n<=+b; }
+  if(/^sch\d+$/.test(a)&&/^sch\d+$/.test(k)) return +k.slice(3)>=+a.slice(3)&&+k.slice(3)<=+b.slice(3);
+  return k===a;
+}
+function grpOf(s){ var gs=(au.data&&au.data.groups)||[]; for(var i=0;i<gs.length;i++) if(inG(s.key,gs[i])) return gs[i]; return null; }
+function secRows(list,filterText,chap){
+  var f=norm(filterText), letters=/[a-z]/i.test(filterText||''), last='';
+  return list.filter(function(s){ return isAdmin||s.status==='generated'||s.status==='verified'; })
+   .filter(function(s){
+     var g=grpOf(s);
+     if(chap&&(!g||g.chapter!==chap)) return false;
+     if(!f) return true;
+     var hay=norm(s.label+' '+s.heading)+(g&&letters?norm(g.chapter+' '+g.part+(g.n?' chapter '+g.n:'')):'');
+     return hay.indexOf(f)>-1;
+   })
+   .map(function(s){
+     var g=grpOf(s), head='';
+     if(g){ var gl=g.chapter+'|'+g.part; if(gl!==last){ last=gl; head='<h3 class="ghead" style="margin:16px 0 6px;font-size:.95rem">'+esc(g.chapter)+(g.part?'<div class="legend" style="margin:2px 0 0;font-weight:400">'+esc(g.part)+'</div>':'')+'</h3>'; } }
+     var st=s.status==='verified'?'✓ Verified':(isAdmin?(s.status==='generated'?'Written':s.status==='unverifiable'?'Could not be verified':'Not written yet'):'');
+     return head+'<a class="crow" href="authority.html?id='+encodeURIComponent(s.id)+'"><strong>'+esc(s.label+(s.heading?' – '+s.heading:''))+'</strong>'+(st?'<span class="m">'+esc(st)+(isAdmin&&s.count?' · cited '+s.count+'×':'')+'</span>':'')+'</a>';
+   }).join('');
+}
+function drawSecs(){
+  var el=$('secs'); if(!el) return;
+  var q=$('sf')?$('sf').value:'', c=$('cg')?$('cg').value:'';
+  var rows=secRows(au.sections||[], q, c);
+  el.innerHTML=rows||'<p class="legend">'+((q||c)?'No section matches.':'No sections have been written yet.')+'</p>';
+}
+function chapSelect(){
+  var gs=(au.data&&au.data.groups)||[], seen={}, o='<option value="">All chapters and parts</option>';
+  gs.forEach(function(g){ if(!seen[g.chapter]){ seen[g.chapter]=1; o+='<option value="'+esc(g.chapter)+'">'+esc(g.chapter)+'</option>'; } });
+  return gs.length?'<select id="cg" class="f" aria-label="Choose a chapter" style="margin:6px 0 10px;width:100%;padding:10px;font-size:16px;border-radius:10px">'+o+'</select>':'';
+}
+function renderLaw(){
+  var d=au.data, ok=au.status==='generated'||au.status==='verified';
+  var secs=au.sections||[], missing=secs.filter(function(s){return s.status==='cited'||(s.hasText&&!s.expl)}).length;
+  $('hd').textContent=TYPES[au.type]||'Statute';
+  $('ttl').textContent=au.name;
+  document.title='LawLink – '+au.name;
+  $('meta').innerHTML=pills(ok);
+  if(isAdmin){
+    var b='<button class="btn" data-a="all"'+(busy?' disabled':'')+'>Write missing explanations</button>'+
+      '<button class="btn alt" data-a="gen">'+(ok?'Update overview':'Write overview')+'</button><button class="btn alt" data-a="merge">Merge into another law</button>';
+    if(ok) b+='<button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark overview verified')+'</button>';
+    $('admin').classList.remove('hidden');
+    $('admin').innerHTML='<h3>Admin</h3><div>Overview: '+esc(statusText())+'</div>'+
+      '<div class="also">'+secs.length+' section'+(secs.length===1?'':'s')+' cited in notes, '+missing+' not written yet. Each section is written and verified on its own page.</div>'+
+      '<div class="btns">'+b+'</div><div id="mbox"></div><div class="msg" id="amsg" role="status"></div>';
+  }
+  var h='';
+  if(ok&&d){
+    h+='<p class="legend" style="margin:6px 0 0">A short overview written by LawLink. Check the official text before relying on it in an answer or in court.</p>';
+    h+=sec('Overview',d.overview)+sec('Purpose and scope',d.purpose)+sec('Amendments and current status',d.amendments);
+  }else if(au.status==='unverifiable'){
+    h='<div class="soonbox"><h3>This could not be verified</h3><p>We could not confirm this law, so no overview was written. It may have been cited with the wrong name.</p></div>';
+  }
+  h+='<div class="kv"><h2>Sections</h2>'+chapSelect()+(secs.length>8?'<label class="search" style="margin:6px 0 10px"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="sf" placeholder="Find a section or chapter, e.g. 84 or fundamental rights" aria-label="Find a section"></label>':'')+'<div id="secs"></div></div>';
+  if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
+  $('body').innerHTML=h;
+  drawSecs();
+  if($('sf')) $('sf').oninput=drawSecs;
+  if($('cg')) $('cg').onchange=drawSecs;
+  $('report').classList.toggle('hidden',!ok||isAdmin);
+}
+function render(){ if(au.kind==='section') renderSection(); else renderLaw(); }
+async function load(fresh){
+  try{ au=await LawLink.getAuth(id,fresh); if(au.id&&au.id!==id){ location.replace('authority.html?id='+encodeURIComponent(au.id)+location.search.replace(/^\?id=[^&]*/,'').replace(/^&/,'&')); return; } render(); }
+  catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('ttl').textContent='Not found'; $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; }
+}
+async function writeAll(btn){
+  var m=$('amsg'); busy=true; btn.disabled=true; btn.textContent='Working…'; m.className='msg'; m.textContent='Looking for cited sections…';
+  var done=0, failed=0, todo=[], i;
+  try{ au=await LawLink.authBackfill(id); }catch(x){ busy=false; renderLaw(); $('amsg').textContent=x.message; $('amsg').className='msg err'; return; }
+  todo=(au.sections||[]).filter(function(s){return s.status==='cited'||(s.hasText&&!s.expl)});
+  var batchable=todo.filter(function(s){return s.hasText&&!s.expl}), singles=todo.filter(function(s){return !(s.hasText&&!s.expl)}), n=0, stop=false;
+  for(i=0;i<batchable.length&&!stop;i+=5){
+    var grp=batchable.slice(i,i+5);
+    $('amsg').textContent='Writing sections '+(n+1)+' to '+(n+grp.length)+' of '+todo.length+'…';
+    try{
+      var br=await LawLink.genAuthBatch(grp.map(function(s){return s.id}));
+      done+=br.done.length; failed+=br.failed.length;
+      br.skipped.forEach(function(sid){ singles.push({id:sid,label:sid.split(':')[3]}); });
+    }catch(x){ failed+=grp.length; if(/log in|expired/i.test(x.message)||/allowance|used up/i.test(x.message)) stop=true; }
+    n+=grp.length;
+  }
+  for(i=0;i<singles.length&&!stop;i++){
+    $('amsg').textContent='Writing section '+(n+i+1)+' of '+todo.length+' ('+singles[i].label+')…';
+    try{ await LawLink.genAuth(singles[i].id); done++; }
+    catch(x){ failed++; if(/log in|expired/i.test(x.message)||/allowance|used up/i.test(x.message)) break; }
+  }
+  busy=false;
+  try{ au=await LawLink.getAuth(id,true); }catch(x){}
+  renderLaw();
+  $('amsg').textContent=todo.length?('Done. Wrote '+done+' of '+todo.length+' section'+(todo.length===1?'':'s')+'.'+(failed?' '+failed+' could not be written (Gemini may be busy). Tap the button again to retry; finished sections are not written twice.':'')):'Nothing to write. Every cited section already has an entry.';
+  if(failed) $('amsg').className='msg err';
+}
+$('admin').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-a]'); if(!b||busy) return; var a=b.dataset.a, m=$('amsg');
+  if(a==='all') return writeAll(b);
+  if(a==='merge'){
+    var mb=$('mbox'); mb.innerHTML='<div class="also">Use this when the same law was added twice under different names. This law is removed. Its sections and citations move to the law you choose, and the old name keeps working.</div><select class="in" id="mto" aria-label="Merge into"><option value="">Loading laws…</option></select><div class="btns" style="margin-top:8px"><button class="btn" data-a="mergego">Merge now</button></div>';
+    try{ var ls=await LawLink.listAuth(au.type==='case'?'auth':'auth',true); $('mto').innerHTML='<option value="">Choose the law to keep</option>'+ls.filter(function(x){return x.id!==au.id}).map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>'}).join(''); }
+    catch(x){ m.textContent=x.message; m.className='msg err'; }
+    return;
+  }
+  if(a==='mergego'){
+    var to=$('mto')&&$('mto').value; if(!to){ m.textContent='Choose the law to keep.'; m.className='msg err'; return; }
+    if(!confirm('Merge "'+au.name+'" into the chosen law? This cannot be undone.')) return;
+    b.disabled=true; m.textContent='Merging…'; m.className='msg';
+    try{ var mr=await LawLink.mergeLaw(au.id,to); try{ localStorage.removeItem('lawlink-authl:auth'); }catch(x){} location.href='authority.html?id='+encodeURIComponent(mr.id); }
+    catch(x){ b.disabled=false; m.textContent=x.message; m.className='msg err'; }
+    return;
+  }
+  if(a==='gen'){
+    var label=b.textContent;
+    b.disabled=true; b.textContent='Writing…'; m.className='msg'; m.textContent='This can take up to a minute.';
+    try{ au=await LawLink.genAuth(id); render(); $('amsg').textContent='Done.'; }
+    catch(x){ b.disabled=false; b.textContent=label; m.textContent=x.message+' Tap again to retry.'; m.className='msg err'; }
+  }else if(a==='verify'){
+    try{ au=await LawLink.authVerify(id,au.status!=='verified'); render(); $('amsg').textContent=au.status==='verified'?'Marked as verified.':'Verification removed.'; }
+    catch(x){ m.textContent=x.message; m.className='msg err'; }
+  }
+});
+$('rbtn').onclick=function(){$('rbox').classList.toggle('hidden')};
+$('rsend').onclick=async function(){
+  var t=$('rt').value.trim(); if(!t){$('rmsg').textContent='Describe the problem first.';return}
+  try{ await LawLink.libReport(id,t); $('rt').value=''; $('rmsg').textContent='Thank you. We will review it.'; }
+  catch(x){ $('rmsg').textContent=x.message; }
+};
+LawLink.me().then(function(u){isAdmin=u.role==='admin'; load(isAdmin)}).catch(function(){load(false)});
+})();
+</script>
+</body>
+</html>

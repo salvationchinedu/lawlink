@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LawLink – Admin inbox</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Admin inbox</h1>
+  </header>
+  <div class="chips" id="chips" role="group" aria-label="Filter"></div>
+  <main>
+    <div class="count" id="count" aria-live="polite">Loading…</div>
+    <div id="list"></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var items=[], filter='all';
+function href(it){
+  var id=it.noteId||'';
+  if(id==='request:law') return {url:'authorities.html?add='+encodeURIComponent(it.message), label:'Add this law'};
+  if(id.indexOf('auth:')===0) return {url:'authority.html?id='+encodeURIComponent(id), label:'Open'};
+  var m=id.split(':');
+  if(m[0]==='t'&&m.length>=4) return {url:'note.html?c='+encodeURIComponent(m[1])+'&p='+m[2]+'&i='+m[3], label:'Open the note'};
+  if(m.length>=2&&(m[0]==='c'||m[0]==='s')) return {url:'note.html?c='+encodeURIComponent(m[1]), label:'Open the note'};
+  if(id&&id.indexOf(':')<0) return {url:'case.html?id='+encodeURIComponent(id), label:'Open the case'};
+  return null;
+}
+function when(ts){ try{ return new Date(ts).toLocaleString([], {dateStyle:'medium', timeStyle:'short'}); }catch(e){ return ''; } }
+function render(){
+  var req=items.filter(function(x){return x.noteId==='request:law'}), err=items.filter(function(x){return x.noteId!=='request:law'});
+  $('chips').innerHTML=[['all','All ('+items.length+')'],['req','Law requests ('+req.length+')'],['err','Error reports ('+err.length+')']].map(function(c){return '<button class="chip" aria-pressed="'+(c[0]===filter)+'" data-t="'+c[0]+'">'+esc(c[1])+'</button>'}).join('');
+  var list=filter==='req'?req:filter==='err'?err:items;
+  $('count').textContent=list.length+(list.length===1?' message':' messages');
+  $('list').innerHTML=list.length?list.map(function(it){
+    var h=href(it);
+    return '<div class="crow" data-id="'+esc(it.id)+'"><span class="m" style="margin:0 0 4px">'+esc((it.noteId==='request:law'?'Law request':'Error report')+' · '+(it.name||'Unknown')+(it.email?' ('+it.email+')':'')+' · '+when(it.at))+'</span>'+
+      '<div class="rich" style="margin:4px 0 10px;white-space:pre-wrap">'+esc(it.message)+'</div>'+
+      '<div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">'+(h?'<a class="btn" style="text-decoration:none" href="'+h.url+'">'+esc(h.label)+'</a>':'')+'<button class="btn alt" data-del="'+esc(it.id)+'">Dismiss</button></div></div>';
+  }).join(''):'<div class="empty"><h3>Nothing here</h3><p>New error reports and law requests from students will appear here.</p></div>';
+}
+$('chips').onclick=function(e){var b=e.target.closest('.chip'); if(b){filter=b.dataset.t; render();}};
+$('list').onclick=async function(e){
+  var b=e.target.closest('[data-del]'); if(!b) return; b.disabled=true;
+  try{ await LawLink.inboxDelete(b.dataset.del); items=items.filter(function(x){return x.id!==b.dataset.del}); render(); }
+  catch(x){ b.disabled=false; $('count').textContent=x.message; }
+};
+LawLink.me().then(function(u){
+  if(u.role!=='admin'){ $('count').textContent=''; $('list').innerHTML='<div class="empty"><h3>Admins only</h3><p>This page is for the LawLink admin.</p></div>'; return; }
+  return LawLink.inbox().then(function(l){ items=l||[]; render(); });
+}).catch(function(e){ $('count').textContent=(e instanceof TypeError)?'Offline. Could not load.':e.message; });
+})();
+</script>
+</body>
+</html>
