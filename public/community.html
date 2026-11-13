@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Community</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.act{font:inherit;font-size:14px;font-weight:600;color:var(--link);background:var(--tint);border:0;border-radius:999px;padding:8px 14px;min-height:40px;cursor:pointer}
+.act[aria-pressed="true"]{background:var(--link);color:var(--on-gold)}
+.act.warn{color:var(--danger);background:transparent}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--gold2bg);color:var(--gold2);margin-right:6px}
+.badge.ok{background:#DDF1E5;color:var(--sage)}
+:root[data-theme="dark"] .badge.ok{background:#16352A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .badge.ok{background:#16352A}}
+.reply.best{border-left:4px solid var(--sage)}
+.pinbar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:10px 0}
+.pinbar .pi{flex:none;width:34px;height:34px;border-radius:9px;background:var(--tint);display:flex;align-items:center;justify-content:center}
+.pinbar .pi svg{width:18px;height:18px;stroke:var(--text);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pinbar .pt{flex:1;min-width:0;text-align:left;background:none;border:0;font:inherit;color:var(--text);cursor:pointer;padding:0}
+.pinbar .pt b{display:block;font-size:13px;color:var(--muted)}
+.pinbar .pt span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.pinbar .pn{flex:none;font-size:13px;color:var(--muted);background:none;border:0;font:inherit;padding:6px}
+.rules{background:var(--tint);border-radius:12px;padding:12px 14px;margin:10px 0;font-size:15px}
+.rules button{float:right;border:0;background:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;min-width:36px;min-height:36px}
+.pushask{background:var(--tint);border-radius:12px;padding:12px 14px;margin:10px 0;font-size:15px;line-height:1.5}
+.pushask .msg:empty{display:none}
+.bar2{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:6px 0}
+.bar2 .m{color:var(--muted);font-size:14px}
+.sel{font:inherit;font-size:15px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);max-width:55%}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet>div{background:var(--surface);color:var(--text);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:18px 18px calc(22px + env(safe-area-inset-bottom,0px))}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--navy);color:var(--on-navy);padding:10px 16px;border-radius:12px;z-index:60;max-width:90%;font-size:15px}
+.chk2{display:flex;gap:10px;align-items:center;margin:12px 0;font-size:16px}
+.chk2 input{width:22px;height:22px}
+</style>
+<script src="ui.js"></script>
+<script src="courses-data.js"></script>
+</head>
+<body>
+<div class="app">
+
+<div id="listView">
+  <header class="top">
+    <h1>Community</h1>
+  </header>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Search questions and tips" aria-label="Search questions and tips">
+    </label>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by type">
+    <button class="chip" data-t="All" aria-pressed="true">All</button>
+    <button class="chip" data-t="Question" aria-pressed="false">Questions</button>
+    <button class="chip" data-t="Tip" aria-pressed="false">Tips</button>
+  </div>
+  <main>
+    <div id="rules" class="rules hidden"><button id="rulesx" aria-label="Close">×</button><b>Be kind and be careful.</b> No exam leaks, no copying whole textbooks, no personal details and no legal advice on real cases. Student posts are not legal authority, so check the original source. Posts disappear after 3 months. <a href="privacy.html" style="font-weight:600">Terms</a></div>
+    <div id="pushask" class="pushask hidden"><b>Want to know when someone answers?</b> Turn on notifications and this phone will tell you, even when Lex-Tabulā is closed.
+      <div class="btns"><button class="btn" id="pushyes" type="button">Turn on notifications</button><button class="btn alt" id="pushno" type="button">Not now</button></div>
+      <div class="msg err" id="pusherr" role="alert"></div></div>
+    <div id="pinbar" class="pinbar hidden"></div>
+    <div class="bar2"><select class="sel" id="cf" aria-label="Filter by course"></select><button class="act" id="refresh" type="button">Refresh</button></div>
+    <div class="count" id="count" aria-live="polite">Loading…</div>
+    <div id="list"></div>
+    <div id="older" class="hidden" style="text-align:center;margin:10px 0"><button class="act" id="olderbtn" type="button">Load older posts</button></div>
+  </main>
+  <button class="fab" id="add" aria-label="New post"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+
+<div id="threadView" class="hidden">
+  <header class="top">
+    <button class="ib" data-back aria-label="Back to community"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>Discussion</h1>
+  </header>
+  <main>
+    <div class="thread" id="post"></div>
+    <div id="replies" style="margin-top:6px"></div>
+    <div class="rbox">
+      <label class="f" for="rb">Your reply</label>
+      <textarea class="in" id="rb" placeholder="Share what you know"></textarea>
+      <label class="chk2"><input type="checkbox" id="ranon"> Reply as Anonymous</label>
+      <div class="msg err" id="rerr" role="alert"></div>
+      <button class="btn" id="rsend" style="width:100%;margin-top:6px">Post reply</button>
+    </div>
+  </main>
+</div>
+
+<div id="composeView" class="hidden">
+  <header class="top">
+    <button class="ib" data-back aria-label="Back to community"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>New post</h1>
+  </header>
+  <main>
+    <div class="row">
+      <div><label class="f" for="pt" style="margin-top:4px">Type</label>
+        <select class="in" id="pt"><option value="Question">Question</option><option value="Tip">Tip</option></select></div>
+      <div><label class="f" for="pc" style="margin-top:4px">Course</label><select class="in" id="pc"></select></div>
+    </div>
+    <label class="f" for="ptopic">Topic (optional)</label>
+    <input class="in" id="ptopic" maxlength="150" placeholder="e.g. Offer and acceptance">
+    <label class="f" for="ptitle">Title</label>
+    <input class="in" id="ptitle" maxlength="150" placeholder="e.g. How do I tell ratio from obiter?">
+    <label class="f" for="pbody">Details</label>
+    <textarea class="in" id="pbody" placeholder="Explain your question or tip. Name the case or statute if you can."></textarea>
+    <label class="chk2"><input type="checkbox" id="panon"> Post as Anonymous (other students will not see your name)</label>
+    <div class="msg err" id="perr" role="alert"></div>
+    <button class="btn" id="psend" style="width:100%;margin-top:6px">Post</button>
+    <p class="msg">Posts are visible to all Lex-Tabulā students for 3 months. Student posts are not official legal authority, so check the original source.</p>
+  </main>
+</div>
+
+<div id="rsheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Report">
+  <div>
+    <h3 style="margin:0 0 8px">Report this</h3>
+    <label class="f" for="rwhy">What is wrong?</label>
+    <select class="in" id="rwhy"><option>Inappropriate</option><option>Exam leak</option><option>Wrong or misleading</option><option>Spam</option><option>Other</option></select>
+    <div class="msg err" id="rmsg" role="alert"></div>
+    <div class="acts"><button class="btn" id="rgo" type="button">Send report</button><button class="btn alt" id="rno" type="button">Cancel</button></div>
+  </div>
+</div>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<nav class="nav" aria-label="Main"><div>
+  <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+  <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+  <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+  <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+  <a href="community.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+</div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="push.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var KEEP=90*86400000, SK='lawlink-cm2', TK='lawlink-th-', TI='lawlink-th-idx';
+var CN=['General'].concat(COURSES.map(function(c){return c.name}).sort(),['Other']);
+var type='All', cur=null, curData=null, loaded=false, syncing=false, lastSync=0, me={admin:false}, repTarget=null;
+if(!getToken()){ location.replace('login.html'); return; }
+LawLink.me().then(function(u){ me.admin=u.role==='admin'; if(curData) paintThread(curData); }).catch(function(){});
+
+// ---- What this phone keeps: the feed (3 months, like a chat) and every thread you opened ----
+function loadStore(){ try{ var s=JSON.parse(localStorage.getItem(SK)); if(s&&s.posts) return s; }catch(e){} return {since:0,posts:{},end:0}; }
+var store=loadStore();
+function prune(){
+  var cut=Date.now()-KEEP, ids=Object.keys(store.posts);
+  ids.forEach(function(id){ var p=store.posts[id]; if(p.ts<cut&&!p.pinned){ delete store.posts[id]; try{localStorage.removeItem(TK+id)}catch(e){} } });
+  ids=Object.keys(store.posts).sort(function(a,b){return store.posts[b].ts-store.posts[a].ts});
+  ids.slice(600).forEach(function(id){ delete store.posts[id]; });
+}
+prune();
+function saveStore(){
+  prune();
+  try{ localStorage.setItem(SK,JSON.stringify(store)); }
+  catch(e){ var ids=Object.keys(store.posts).sort(function(a,b){return store.posts[b].ts-store.posts[a].ts}); ids.slice(150).forEach(function(id){ delete store.posts[id]; try{localStorage.removeItem(TK+id)}catch(x){} }); try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(x){} }
+}
+function merge(list){
+  (list||[]).forEach(function(p){
+    if(p.gone){ delete store.posts[p.id]; try{localStorage.removeItem(TK+p.id)}catch(e){} }
+    else store.posts[p.id]=Object.assign(store.posts[p.id]||{},p);
+  });
+}
+function readTh(id){ try{ return JSON.parse(localStorage.getItem(TK+id)); }catch(e){ return null; } }
+function saveTh(id,d){
+  try{
+    localStorage.setItem(TK+id,JSON.stringify({post:d.post,replies:d.replies}));
+    var ix=[]; try{ ix=JSON.parse(localStorage.getItem(TI))||[]; }catch(e){}
+    ix=ix.filter(function(x){return x!==id}); ix.unshift(id);
+    ix.slice(40).forEach(function(x){ try{localStorage.removeItem(TK+x)}catch(e){} });
+    localStorage.setItem(TI,JSON.stringify(ix.slice(0,40)));
+  }catch(e){}
+}
+
+function ago(ts){
+  var m=Math.floor((Date.now()-ts)/60000);
+  if(m<1)return 'just now'; if(m<60)return m+'m ago';
+  var h=Math.floor(m/60); if(h<24)return h+'h ago';
+  var d=Math.floor(h/24); return d+(d===1?' day ago':' days ago');
+}
+function payWall(){
+  ['listView','threadView','composeView'].forEach(function(id){ $(id).classList.add('hidden'); });
+  $('add').classList.add('hidden');
+  var w=document.getElementById('paywall');
+  if(!w){ w=document.createElement('main'); w.id='paywall'; w.className='narrow'; $('listView').parentNode.insertBefore(w,$('listView')); }
+  w.innerHTML='<h1 style="font-size:24px;margin:8px 0 14px">Community</h1><div class="soonbox"><h3>Community is for pass holders</h3><p>Get the Lex-Tabulā pass to read and post in the student community, take the full quizzes and IRAC tests, and open every topic.</p><div class="btns" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><a class="btn" href="subscribe.html" style="text-decoration:none">Get the pass</a></div></div>';
+}
+function authFail(e){ if(/for students with the (LawLink|Lex-Tabulā) pass/.test(e.message)){ payWall(); return true; } if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html?next=community.html'); return true; } return false; }
+function netMsg(e,what){ return (e instanceof TypeError)?'Could not '+what+'. Check your data and try again.':e.message; }
+function views(v){ ['listView','threadView','composeView'].forEach(function(id){$(id).classList.toggle('hidden',id!==v)}); window.scrollTo(0,0); }
+function toast(t){ var el=$('toast'); el.textContent=t; el.classList.remove('hidden'); clearTimeout(toast.t); toast.t=setTimeout(function(){el.classList.add('hidden')},3200); }
+function pill(t){ return '<span class="pill'+(t==='Tip'?' tip':'')+'">'+esc(t)+'</span>'; }
+function byline(a,ts){ return '<div class="by"><div class="av">'+esc(String(a||'?').charAt(0).toUpperCase())+'</div><div><b>'+esc(a)+'</b><small>'+ago(ts)+'</small></div></div>'; }
+function seen(){ try{ localStorage.setItem('lawlink-cm-seen',String(Date.now())); }catch(e){} }
+
+// ---- The feed ----
+function all(){ return Object.keys(store.posts).map(function(id){return store.posts[id]}); }
+var pinIdx=0;
+function pinRibbon(){
+  var el=$('pinbar'), pins=all().filter(function(p){return p.pinned}).sort(function(a,b){return b.ts-a.ts});
+  if(!pins.length){ el.classList.add('hidden'); return; }
+  if(pinIdx>=pins.length) pinIdx=0; var p=pins[pinIdx];
+  el.classList.remove('hidden');
+  el.innerHTML='<div class="pi"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/></svg></div><button class="pt" type="button" data-pin="'+esc(p.id)+'"><b>Pinned'+(pins.length>1?' · '+(pinIdx+1)+' of '+pins.length:'')+'</b><span>'+esc(p.title)+'</span></button>'+(pins.length>1?'<button class="pn" type="button" data-next="1" aria-label="Next pinned post">Next</button>':'');
+}
+function render(){
+  pinRibbon();
+  document.querySelectorAll('#chips .chip').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.t===type)});
+  var q=$('q').value.trim().toLowerCase(), cf=$('cf').value;
+  var r=all().filter(function(p){
+    return (type==='All'||p.type===type)&&(cf==='All courses'||p.course===cf)&&(!q||(p.title+' '+p.body+' '+p.course+' '+(p.topic||'')).toLowerCase().indexOf(q)>-1);
+  }).sort(function(a,b){ return (b.pinned?1:0)-(a.pinned?1:0)||b.ts-a.ts; });
+  if(loaded) $('count').textContent=r.length+(r.length===1?' post':' posts')+(lastSync?' · updated '+ago(lastSync):'');
+  $('older').classList.toggle('hidden',!(loaded&&all().length&&!store.end));
+  if(!r.length){
+    $('list').innerHTML=loaded?'<div class="empty"><h3>'+(all().length?'No posts match':'Nothing here yet')+'</h3><p>'+(all().length?'Try a different word or filter.':'Be the first to ask a question or share a tip.')+'</p></div>':'';
+    return;
+  }
+  $('list').innerHTML=r.map(function(p){
+    return '<button class="note'+(p.type==='Tip'?' tip':'')+'" data-id="'+esc(p.id)+'"><div class="meta">'+(p.pinned?'<span class="badge">Pinned</span>':'')+pill(p.type)+esc(p.course)+(p.topic?' · '+esc(p.topic):'')+'</div><h3 style="margin-top:6px">'+esc(p.title)+'</h3><p>'+esc(p.body)+'</p><div class="foot">'+esc(p.author)+' · '+ago(p.ts)+' · '+p.replies+(p.replies===1?' reply':' replies')+(p.best?' · <b style="color:var(--sage)">Answered ✓</b>':'')+'</div></button>';
+  }).join('');
+}
+async function sync(){
+  if(syncing) return; syncing=true; $('refresh').disabled=true;
+  try{
+    if(store.since){
+      var since=store.since, n=0, d;
+      do{ d=await LawLink.listPosts({since:since,limit:100}); merge(d.posts); since=d.now; n++; }while(d.more&&n<6);
+      store.since=Math.max(store.since,since-3000);
+    }else{
+      var d0=await LawLink.listPosts({limit:60}); merge(d0.posts); store.since=d0.now-3000; store.end=d0.more?0:1;
+    }
+    loaded=true; lastSync=Date.now(); saveStore(); render();
+  }catch(e){ if(!authFail(e)){ loaded=true; $('count').textContent='Offline. Showing saved posts.'; render(); } }
+  finally{ syncing=false; $('refresh').disabled=false; }
+}
+async function loadOlder(){
+  var ts=all().map(function(p){return p.ts}); if(!ts.length) return;
+  var b=$('olderbtn'); b.disabled=true;
+  try{ var d=await LawLink.listPosts({before:Math.min.apply(null,ts),limit:40}); merge(d.posts); if(!d.more) store.end=1; saveStore(); render(); }
+  catch(e){ if(!authFail(e)) toast(netMsg(e,'load older posts')); }
+  finally{ b.disabled=false; }
+}
+
+// ---- A thread ----
+function sortReplies(post,rs){
+  return rs.slice().sort(function(a,b){
+    var ba=post.best===a.id?1:0, bb=post.best===b.id?1:0; if(ba!==bb) return bb-ba;
+    if(a.verified!==b.verified) return (b.verified?1:0)-(a.verified?1:0);
+    return (b.helpful-a.helpful)||(a.ts-b.ts);
+  });
+}
+function paintThread(d){
+  curData=d; var p=d.post, canBest=p.mine||me.admin;
+  var acts='';
+  if(p.mine) acts+='<button class="act warn" id="delpost" type="button">Delete post</button>'; else acts+='<button class="act warn" data-rep="post" data-id="'+esc(p.id)+'" type="button">Report</button>';
+  if(me.admin) acts+='<button class="act" data-pin="'+(p.pinned?0:1)+'" type="button">'+(p.pinned?'Unpin':'Pin')+'</button><button class="act" data-mute="'+esc(p.uid||'')+'" type="button">Mute author</button>'+(p.mine?'':'<button class="act warn" id="delpost" type="button">Delete post</button>');
+  $('post').innerHTML=(p.pinned?'<span class="badge">Pinned</span>':'')+pill(p.type)+'<span class="meta" style="font-size:13px;color:var(--muted)">'+esc(p.course)+(p.topic?' · '+esc(p.topic):'')+'</span><h2>'+esc(p.title)+'</h2>'+byline(p.author,p.ts)+(me.admin&&p.anon?'<div class="m" style="font-size:13px;color:var(--muted)">Admin only: posted by '+esc(p.real||'')+'</div>':'')+'<p class="body">'+esc(p.body)+'</p><div class="acts">'+acts+'</div>';
+  var rs=sortReplies(p,d.replies||[]);
+  $('replies').innerHTML=rs.length?'<h3 style="margin:14px 0 0;font-size:17px">'+rs.length+(rs.length===1?' reply':' replies')+'</h3>'+rs.map(function(r){
+    var best=p.best===r.id, a='';
+    if(!r.mine) a+='<button class="act" data-help="'+esc(r.id)+'" aria-pressed="'+(r.voted?'true':'false')+'" type="button">Helpful'+(r.helpful?' · '+r.helpful:'')+'</button>'; else if(r.helpful) a+='<span class="m" style="color:var(--muted)">'+r.helpful+' found this helpful</span>';
+    if(canBest) a+='<button class="act" data-best="'+esc(r.id)+'" aria-pressed="'+(best?'true':'false')+'" type="button">'+(best?'Best answer ✓':'Mark as best answer')+'</button>';
+    if(me.admin) a+='<button class="act" data-ver="'+esc(r.id)+'" data-on="'+(r.verified?0:1)+'" type="button">'+(r.verified?'Remove Verified':'Mark Verified')+'</button><button class="act" data-mute="'+esc(r.uid||'')+'" type="button">Mute</button>';
+    if(!r.mine) a+='<button class="act warn" data-rep="reply" data-id="'+esc(r.id)+'" type="button">Report</button>';
+    if(r.mine||me.admin) a+='<button class="act warn" data-rid="'+esc(r.id)+'" type="button">Delete</button>';
+    return '<div class="reply'+(best?' best':'')+'">'+(best?'<span class="badge ok">Best answer</span>':'')+(r.verified?'<span class="badge">Verified by Lex-Tabulā</span>':'')+byline(r.author,r.ts)+(me.admin&&r.anon?'<div class="m" style="font-size:13px;color:var(--muted)">Admin only: posted by '+esc(r.real||'')+'</div>':'')+'<p class="body">'+esc(r.body)+'</p><div class="acts">'+a+'</div></div>';
+  }).join(''):'<p class="msg" style="margin-top:14px">No replies yet. Be the first to help.</p>';
+}
+async function openThread(id){
+  cur=id; curData=null; views('threadView'); $('rerr').textContent=''; $('rb').value=''; $('ranon').checked=false;
+  var c=readTh(id), p=store.posts[id];
+  if(c) paintThread(c); else if(p){ paintThread({post:p,replies:[]}); $('replies').innerHTML='<p class="msg">Loading replies…</p>'; }
+  await refreshThread();
+}
+async function refreshThread(){
+  try{ var d=await LawLink.getPost(cur); saveTh(cur,d); store.posts[cur]=Object.assign(store.posts[cur]||{},d.post,{replies:d.replies.length}); saveStore(); paintThread(d); }
+  catch(e){
+    if(authFail(e)) return;
+    if(/no longer available/i.test(e.message)){ delete store.posts[cur]; try{localStorage.removeItem(TK+cur)}catch(x){} saveStore(); toast('That post is no longer available.'); back(); return; }
+    if(!curData) $('replies').innerHTML='<p class="msg err">'+esc(netMsg(e,'load replies'))+'</p>'; else toast('Offline. Showing what is saved on this phone.');
+  }
+}
+function back(){ views('listView'); render(); sync(); }
+
+// Two-tap delete helper
+function twoTap(btn,label,action){
+  if(btn.dataset.armed){ btn.disabled=true; btn.textContent='Deleting…'; action(); return; }
+  btn.dataset.armed='1'; btn.textContent='Tap again to delete';
+  setTimeout(function(){ if(btn.isConnected&&!btn.disabled){ delete btn.dataset.armed; btn.textContent=label; } },3000);
+}
+async function act(fn,okMsg){ try{ var r=await fn(); if(okMsg) toast(okMsg); await refreshThread(); return r; }catch(e){ if(!authFail(e)) toast(netMsg(e,'do that')); } }
+
+// ---- Wiring ----
+$('cf').innerHTML='<option>All courses</option>'+CN.map(function(c){return '<option>'+esc(c)+'</option>'}).join('');
+$('pc').innerHTML=CN.map(function(c){return '<option>'+esc(c)+'</option>'}).join('');
+$('q').oninput=render; $('cf').onchange=render;
+$('chips').onclick=function(e){var b=e.target.closest('.chip');if(b){type=b.dataset.t;render()}};
+$('pinbar').onclick=function(e){ var n=e.target.closest('[data-next]'); if(n){ pinIdx++; pinRibbon(); return; } var b=e.target.closest('[data-pin]'); if(b){ openThread(b.dataset.pin); pinIdx++; } };
+$('list').onclick=function(e){var b=e.target.closest('.note');if(b)openThread(b.dataset.id)};
+$('refresh').onclick=function(){ sync(); };
+$('olderbtn').onclick=loadOlder;
+document.querySelectorAll('[data-back]').forEach(function(b){b.onclick=back});
+function compose(pre){
+  pre=pre||{};
+  $('pt').value=pre.type||'Question'; $('pc').value=pre.course&&CN.indexOf(pre.course)>-1?pre.course:'General';
+  $('ptopic').value=pre.topic||''; $('ptitle').value=''; $('pbody').value=''; $('panon').checked=false; $('perr').textContent='';
+  views('composeView'); if(pre.course) setTimeout(function(){ $('ptitle').focus(); },50);
+}
+$('add').onclick=function(){ compose(); };
+try{ if(!localStorage.getItem('lawlink-cm-rules')) $('rules').classList.remove('hidden'); }catch(e){}
+$('rulesx').onclick=function(){ $('rules').classList.add('hidden'); try{localStorage.setItem('lawlink-cm-rules','1')}catch(e){} };
+
+$('psend').onclick=async function(){
+  var b=$('psend'), post={type:$('pt').value,course:$('pc').value,topic:$('ptopic').value.trim(),title:$('ptitle').value.trim(),body:$('pbody').value.trim(),anon:$('panon').checked};
+  if(!post.title){$('perr').textContent='Add a title.';return}
+  if(!post.body){$('perr').textContent='Write your question or tip.';return}
+  b.disabled=true; b.textContent='Posting…'; $('perr').textContent='';
+  try{ await LawLink.createPost(post); back(); toast('Posted.'); if(post.type==='Question') askPush(); }
+  catch(e){ if(!authFail(e)) $('perr').textContent=netMsg(e,'post'); }
+  finally{ b.disabled=false; b.textContent='Post'; }
+};
+// After a student's first question, offer notifications once. Not shown if they cannot work on this phone or the student already chose.
+function askPush(){
+  try{ if(localStorage.getItem('lawlink-push-ask')||!window.PushUI||PushUI.support()!=='ok') return; }catch(e){ return; }
+  PushUI.state().then(function(st){ if(!st.on){ $('pusherr').textContent=''; $('pushask').classList.remove('hidden'); } });
+}
+function pushAskDone(){ try{ localStorage.setItem('lawlink-push-ask','1'); }catch(e){} $('pushask').classList.add('hidden'); }
+$('pushno').onclick=pushAskDone;
+$('pushyes').onclick=async function(){
+  var b=$('pushyes'); b.disabled=true; $('pusherr').textContent='';
+  try{ await PushUI.enable(); pushAskDone(); toast('Notifications are on. You can change them in Settings.'); }
+  catch(e){ $('pusherr').textContent=netMsg(e,'turn on notifications'); }
+  b.disabled=false;
+};
+$('rsend').onclick=async function(){
+  var b=$('rsend'), body=$('rb').value.trim();
+  if(!body){$('rerr').textContent='Write a reply first.';return}
+  b.disabled=true; b.textContent='Posting…'; $('rerr').textContent='';
+  try{ await LawLink.reply(cur,body,$('ranon').checked); $('rb').value=''; await refreshThread(); }
+  catch(e){ if(!authFail(e)) $('rerr').textContent=netMsg(e,'post your reply'); }
+  finally{ b.disabled=false; b.textContent='Post reply'; }
+};
+$('threadView').addEventListener('click',function(e){
+  var t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.help){ act(function(){ return LawLink.helpful(t.dataset.help); }); return; }
+  if(t.dataset.best){ act(function(){ return LawLink.bestAnswer(cur,t.dataset.best); }); return; }
+  if(t.dataset.ver){ act(function(){ return LawLink.commVerify(t.dataset.ver,t.dataset.on==='1'); }); return; }
+  if(t.dataset.pin!==undefined){ act(function(){ return LawLink.commPin(cur,t.dataset.pin==='1'); },t.dataset.pin==='1'?'Pinned.':'Unpinned.'); return; }
+  if(t.dataset.mute!==undefined){ var d=prompt('Mute this student for how many days? (0 to unmute)','7'); if(d===null) return; act(function(){ return LawLink.commMute(t.dataset.mute,Number(d)||0); },'Done.'); return; }
+  if(t.dataset.rep){ repTarget={kind:t.dataset.rep,id:t.dataset.id}; $('rmsg').textContent=''; $('rsheet').classList.remove('hidden'); return; }
+  if(t.dataset.rid){ twoTap(t,'Delete',async function(){ try{ await LawLink.deleteReply(t.dataset.rid); await refreshThread(); }catch(x){ if(!authFail(x)){ t.disabled=false; t.textContent='Delete'; toast(netMsg(x,'delete')); } } }); return; }
+  if(t.id==='delpost'){ twoTap(t,'Delete post',async function(){ try{ await LawLink.deletePost(cur); delete store.posts[cur]; saveStore(); back(); }catch(x){ if(!authFail(x)){ t.disabled=false; t.textContent='Delete post'; toast(netMsg(x,'delete')); } } }); }
+});
+$('rno').onclick=function(){ $('rsheet').classList.add('hidden'); };
+$('rgo').onclick=async function(){
+  var b=$('rgo'); b.disabled=true; $('rmsg').textContent='';
+  try{
+    var r=await LawLink.reportPost(repTarget.kind,repTarget.id,$('rwhy').value);
+    $('rsheet').classList.add('hidden'); toast('Thank you. We will look at it.');
+    if(r&&r.hidden&&repTarget.kind==='post'){ delete store.posts[cur]; saveStore(); back(); } else refreshThread();
+  }catch(e){ if(!authFail(e)) $('rmsg').textContent=netMsg(e,'send the report'); }
+  finally{ b.disabled=false; }
+};
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'&&!$('listView').classList.contains('hidden')&&Date.now()-lastSync>120000) sync(); });
+
+// "Ask about this topic" from a note opens a new post with the course and topic filled in.
+(function(){
+  var q=new URLSearchParams(location.search);
+  render();
+  if(/^[\w-]{8,64}$/.test(q.get('t')||'')) openThread(q.get('t'));
+  else if(q.get('ask')==='1'){
+    var c=COURSES.filter(function(x){return x.id===q.get('c')})[0], tp='';
+    try{ if(q.get('p')!==null&&q.get('i')!==null){ var pt=c&&c.parts[Number(q.get('p'))]; tp=(pt&&pt.topics[Number(q.get('i'))])||''; } }catch(e){}
+    compose({course:c?c.name:'',topic:tp});
+  }
+  seen(); sync();
+})();
+})();
+</script>
+</body>
+</html>

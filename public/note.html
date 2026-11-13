@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Note</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" id="back" href="courses.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="hd">Note</h1>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <h2 id="ttl" class="ttl"></h2>
+    <div id="jump" class="jump hidden" aria-label="Jump to a section"></div>
+    <div id="admin" class="hidden"></div>
+    <div id="quizadm" class="adm hidden"></div>
+    <div id="body"></div>
+    <div id="quizbox" class="hidden" style="margin-top:24px"></div>
+    <div id="askbox" class="hidden" style="margin-top:14px"></div>
+    <section id="mine" style="margin-top:28px">
+      <div class="gh" style="margin-top:0">My notes<small id="minen"></small></div>
+      <div id="minel"></div>
+      <a class="btn alt" id="newmine" href="notes.html" style="text-decoration:none;margin-top:6px">Write my note</a>
+    </section>
+    <div id="report" class="hidden" style="margin-top:28px">
+      <button class="btn alt" id="rbtn">Report an error</button>
+      <div id="rbox" class="hidden"><label class="f" for="rt">What is wrong?</label><textarea class="in" id="rt" style="min-height:90px"></textarea>
+        <div class="msg" id="rmsg" role="status"></div><button class="btn" id="rsend" style="margin-top:8px">Send report</button></div>
+    </div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+
+var q=new URLSearchParams(location.search), cid=q.get('c'), p=q.get('p'), ti=q.get('i');
+var c=COURSES.filter(function(x){return x.id===cid})[0];
+var isCourse=p===null, part=c&&!isCourse?c.parts[+p]:null, topic=part?part.topics[+ti]:null;
+if(!c||(!isCourse&&!topic)){ $('ttl').textContent='We could not find that note.'; return; }
+
+var KIND=isCourse?'course':'topic';
+var KEYS=isCourse?['overview','scope','topicmap','authorities','studyguide','exam']
+                 :['intro','principles','statutory','cases','application','exceptions','criticism','summary','exam'];
+var TITLES={intro:'Introduction',principles:'Key principles and rules',statutory:'Statutory basis',cases:'Leading cases',application:'Application and illustrations',exceptions:'Exceptions and limits',criticism:'Criticism and reform',summary:'Summary',exam:'Exam focus',overview:'Overview',scope:'Scope and learning outcomes',topicmap:'How the topics connect',authorities:'Key authorities',studyguide:'Study guide'};
+var NOTE_ID=isCourse?'c:'+c.id:'t:'+c.id+':'+p+':'+ti;
+var TITLE=isCourse?c.name+': course note':topic;
+var all=[]; c.parts.forEach(function(x){all=all.concat(x.topics)});
+var CTX=isCourse?{course:c.name,topics:all}:{course:c.name,part:part.label,topic:topic,siblings:part.topics.filter(function(t){return t!==topic})};
+
+$('hd').textContent=c.name; $('back').href='course.html?id='+encodeURIComponent(c.id);
+(function(){ var m=/^(.*?)\s*\((.*)\)\s*$/.exec(isCourse?'':topic); if(m){ $('ttl').innerHTML=esc(m[1])+'<span class="tsub">'+esc(m[2].charAt(0).toUpperCase()+m[2].slice(1))+'</span>'; } else $('ttl').textContent=isCourse?'Course note':topic; })();
+document.title='Lex-Tabulā – '+TITLE;
+
+Prog.setLast({c:c.id,p:p,i:ti,t:TITLE,cn:c.name});
+if(!isCourse){   // If this topic has an approved quiz, the quiz replaces the manual "done" button: passing it is what makes the topic learnt.
+  LawLink.quizReady(c.id).then(function(m){
+    if(window.__locked||!m||!m[NOTE_ID]) return;
+    var r=Prog.quizOf(NOTE_ID), href='quiz.html?c='+encodeURIComponent(c.id)+'&p='+p+'&i='+ti;
+    var bx=document.getElementById('quizbox'); bx.classList.remove('hidden');
+    bx.innerHTML='<div class="crow" style="cursor:default"><strong>'+(r&&r.p?'Topic learnt ✓':'Test what you have learnt')+'</strong><span class="m">10 questions · 10 minutes · pass mark 80%'+(r?' · Best score '+r.b+'%':'')+'</span></div><a class="btn" href="'+href+'" style="width:100%;text-decoration:none">'+(r&&r.p?'Take the quiz again':'Take the quiz')+'</a>';
+  }).catch(function(){});
+}
+var isAdmin=false, data={note:null,sections:[]}, editing=false, busy=false, armed=false;
+
+function setMsg(t,err){var m=$('amsg'); if(m){m.textContent=t||''; m.className='msg'+(err?' err':'')}}
+function have(){return data.sections.map(function(s){return s.key})}
+
+function render(){
+  var n=data.note, h='';
+  var seal='<svg viewBox="0 0 28 32" aria-hidden="true"><path d="M2 30V14a12 12 0 0 1 24 0v16z"/><path d="M8.5 19l4 4 7-9"/></svg>';
+  var meta='<div class="nmeta">'+(n&&n.verified?'<span class="seal">'+seal+'Verified by Lex-Tabulā</span>':'<span class="pt">By Lex-Tabulā</span>')+(!isCourse?'<span class="pt">'+esc(part.label.replace(/ \(.*\)/,''))+'</span>':'')+'</div>';
+  $('meta').innerHTML=meta;
+
+  if(isAdmin) renderAdmin();
+  if(!data.sections.length){
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This note has not been written yet.</p></div>';
+  }else{
+    data.sections.forEach(function(s){
+      h+='<section class="nsec'+(s.key==='exam'?' ex':'')+'" id="s-'+s.key+'"><h2>'+esc(s.title)+'</h2>';
+      h+=editing?'<textarea class="in" id="ed-'+s.key+'">'+esc(s.body)+'</textarea><div class="btns"><button class="btn" data-save="'+s.key+'">Save section</button></div>'
+                :'<div class="rich">'+rich(s.body)+'</div>';
+      h+='</section>';
+    });
+  }
+  $('body').innerHTML=h;
+  var jp=$('jump'); jp.innerHTML=data.sections.length>3?data.sections.map(function(s){return '<a href="#s-'+s.key+'"'+(s.key==='exam'?' class="ex"':'')+'>'+esc(s.title)+'</a>'}).join(''):''; jp.classList.toggle('hidden',data.sections.length<=3);
+  $('report').classList.toggle('hidden',!data.sections.length||isAdmin);
+}
+
+function renderAdmin(){
+  var n=data.note, missing=KEYS.filter(function(k){return have().indexOf(k)<0});
+  var st=n?(n.status==='complete'?'Complete':'In progress'):'Not generated';
+  var line='Status: '+st+(n?' · Score '+n.score+'%':'')+(n&&n.verified?' · Verified':'');
+  var b='';
+  b+='<button class="btn" data-a="gen">'+(!data.sections.length?'Generate note':missing.length?'Generate missing ('+missing.length+')':'Regenerate all')+'</button>';
+  if(data.sections.length){
+    b+='<button class="btn alt" data-a="check">Check</button>';
+    b+='<button class="btn alt" data-a="scan">Find authorities</button>';
+    b+='<button class="btn alt" data-a="verify">Mark verified</button>';
+    if(missing.length) b+='<button class="btn alt" data-a="regen">Regenerate all</button>';
+    b+='<button class="btn alt" data-a="edit">'+(editing?'Done editing':'Edit by hand')+'</button>';
+  }
+  $('admin').classList.remove('hidden');
+  $('admin').innerHTML='<h3>Admin</h3><div>'+esc(line)+'</div><div class="btns">'+b+'</div><div class="prog '+(busy?'':'hidden')+'" id="prog"><i id="pbar"></i></div><div class="msg" id="amsg" role="status"></div>';
+}
+
+function watermark(){
+  if(document.getElementById('wm')) return;
+  function paint(code){
+    if(document.getElementById('wm')) return;
+    var t=String(code||'Lex-Tabulā').replace(/[<>&"]/g,''), svg='<svg xmlns="http://www.w3.org/2000/svg" width="320" height="170"><text x="10" y="100" transform="rotate(-24 160 85)" font-family="sans-serif" font-size="15" fill="#808080" fill-opacity="0.16">'+t+'</text></svg>';
+    var d=document.createElement('div'); d.id='wm'; d.setAttribute('aria-hidden','true');
+    d.style.cssText='position:fixed;inset:0;z-index:4;pointer-events:none;background-image:url("data:image/svg+xml;utf8,'+encodeURIComponent(svg)+'");background-repeat:repeat';
+    document.body.appendChild(d);
+  }
+  // The mark is a short code (like LT-4K7Q2X), never the email. A pass issued before codes existed is renewed once to get one.
+  LawLink.me().then(function(u){
+    if(u&&u.wm){ paint(u.wm); return; }
+    if(u&&!u.guest) LawLink.renew().then(function(){ return LawLink.me(); }).then(function(v){ paint(v&&v.wm); }).catch(function(){ paint(''); }); else paint('');
+  }).catch(function(){ paint(''); });
+}
+// Library notes cannot be selected, copied, dragged or printed (the admin can, to edit). Photographing the screen cannot be stopped.
+function protect(){
+  if(window.__prot||isAdmin) return; window.__prot=1;
+  var st=document.createElement('style');
+  st.textContent='#body,#meta{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#body img{-webkit-user-drag:none}#body textarea,#body input{-webkit-user-select:text;user-select:text}body.away #body{filter:blur(18px)}@media print{#body,#meta,#wm{display:none!important}body::before{content:"Printing is switched off for Lex-Tabulā notes.";display:block;padding:24px;font:16px sans-serif}}';
+  document.head.appendChild(st);
+  var b=document.getElementById('body'), stop=function(e){ if(e.target&&e.target.closest&&e.target.closest('textarea,input')) return; e.preventDefault(); };
+  ['contextmenu','copy','cut','selectstart','dragstart'].forEach(function(n){ b.addEventListener(n,stop); });
+  document.addEventListener('keydown',function(e){ if((e.ctrlKey||e.metaKey)&&/^[cxpsa]$/i.test(e.key)&&!(e.target&&e.target.closest&&e.target.closest('textarea,input'))) e.preventDefault(); });
+  document.addEventListener('visibilitychange',function(){ document.body.classList.toggle('away',document.visibilityState!=='visible'); });
+}
+async function load(){
+  try{ await LawLink.payState(); }catch(e){}
+  try{ data=await LawLink.libGet(NOTE_ID,isAdmin); }catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; return; }
+  if(data.locked){ window.__locked=1; $('body').innerHTML=LawLink.lockHtml(data.why); document.getElementById('quizbox').classList.add('hidden'); return; }
+  watermark(); protect();
+  var ak=$('askbox'); if(ak){ ak.classList.remove('hidden'); ak.innerHTML='<a class="btn alt" style="width:100%;text-decoration:none" href="community.html?ask=1&c='+encodeURIComponent(c.id)+(isCourse?'':'&p='+p+'&i='+ti)+'">Ask about this topic</a>'; }
+  render();
+}
+
+async function run(keys){
+  var reviewedN=0, changedN=0;
+  busy=true; renderAdmin();
+  for(var k=0;k<keys.length;k++){
+    setMsg('Writing and reviewing '+(k+1)+' of '+keys.length+': '+TITLES[keys[k]]+'…'); $('pbar').style.width=Math.round(k/keys.length*100)+'%';
+    try{ var gr=await LawLink.genSection({noteId:NOTE_ID,kind:KIND,key:keys[k],title:TITLE,context:CTX}); if(gr&&gr.reviewed){ reviewedN++; changedN+=gr.changes||0; } }
+    catch(e){ busy=false; await load(); setMsg('Stopped: '+(e instanceof TypeError?'connection lost. ':'')+e.message+' Tap Generate to continue.',true); return; }
+    try{ data=await LawLink.libGet(NOTE_ID,isAdmin); }catch(e){}
+  }
+  busy=false; await load(); setMsg('Done. '+(reviewedN?'A second pass reviewed '+reviewedN+' section'+(reviewedN===1?'':'s')+' and corrected or removed '+changedN+' doubtful detail'+(changedN===1?'':'s')+'. ':'')+'Tap Check to confirm it is complete, then read it before marking it verified.');
+}
+
+$('admin').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-a]'); if(!b||busy) return; var a=b.dataset.a;
+  if(a==='gen'){ var miss=KEYS.filter(function(k){return have().indexOf(k)<0}); run(miss.length?miss:KEYS); }
+  else if(a==='regen'){ if(!armed){armed=true;b.textContent='Tap again to confirm';setTimeout(function(){armed=false;if(b.isConnected)b.textContent='Regenerate all'},3000);return} armed=false; run(KEYS); }
+  else if(a==='check'){ try{ var r=await LawLink.genCheck(NOTE_ID); await load(); setMsg('Score '+r.score+'%.'+(r.missing.length?' Missing or too short: '+r.missing.join(', ')+'.':' Every section is present.'),r.score<95); }catch(x){ setMsg(x.message,true); } }
+  else if(a==='verify'){ try{ await LawLink.genVerify(NOTE_ID); await load(); setMsg('Marked as verified.'); }catch(x){ setMsg(x.message,true); } }
+  else if(a==='scan'){ b.disabled=true; setMsg('Reading the note for Acts, rules and treaties… this can take up to a minute.'); try{ var r=await LawLink.scanNote(NOTE_ID); data=await LawLink.libGet(NOTE_ID,true); render(); setMsg(r.linked?'Linked '+r.linked+' authorit'+(r.linked===1?'y':'ies')+' in '+r.sections+' section'+(r.sections===1?'':'s')+'. The wording did not change.'+(r.aiNote?' Gemini was not used: '+r.aiNote:''):'No new statutes or rules found to link.'+(r.aiNote?' Gemini was not used: '+r.aiNote:'')); }catch(x){ b.disabled=false; setMsg(x.message,true); } }
+  else if(a==='edit'){ editing=!editing; render(); }
+});
+$('body').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-save]'); if(!b) return; var k=b.dataset.save;
+  b.disabled=true; b.textContent='Saving…';
+  try{ await LawLink.genSave({noteId:NOTE_ID,key:k,title:TITLE,body:$('ed-'+k).value}); data=await LawLink.libGet(NOTE_ID,isAdmin); editing=false; render(); setMsg('Saved. Verification was cleared, so tap Check and Mark verified again.'); }
+  catch(x){ b.disabled=false; b.textContent='Save section'; setMsg(x.message,true); }
+});
+
+$('rbtn').onclick=function(){$('rbox').classList.toggle('hidden')};
+$('rsend').onclick=async function(){
+  var t=$('rt').value.trim(); if(!t){$('rmsg').textContent='Describe the problem first.';return}
+  try{ await LawLink.libReport(NOTE_ID,t); $('rt').value=''; $('rmsg').textContent='Thank you. We will review it.'; }
+  catch(x){ $('rmsg').textContent=x.message; }
+};
+
+// Your own notes for this course or topic, with a shortcut to write a new one.
+$('newmine').href='notes.html?new=1&c='+encodeURIComponent(c.id)+(isCourse?'':'&p='+p+'&i='+ti);
+function drawMine(list){
+  var m=list.filter(function(x){return x.course===c.name&&(isCourse||x.topic===topic)}).sort(function(a,b){return b.ts-a.ts});
+  $('minen').textContent=m.length?m.length+(m.length===1?' note':' notes'):'';
+  $('minel').innerHTML=m.length?m.map(function(x){return '<a class="crow" href="notes.html?edit='+encodeURIComponent(x.id)+'"><strong>'+esc(x.title||'Untitled note')+'</strong><span class="m">'+esc(String(x.body||'').replace(/\s+/g,' ').slice(0,90))+'</span></a>'}).join(''):'<p class="legend" style="margin:0 0 8px">You have not written a note here yet.</p>';
+}
+try{ var mc=JSON.parse(localStorage.getItem('lawlink-notes-cache')); if(mc) drawMine(mc); else drawMine([]); }catch(e){ drawMine([]); }
+LawLink.listNotes().then(function(l){ try{localStorage.setItem('lawlink-notes-cache',JSON.stringify(l))}catch(e){} drawMine(l); }).catch(function(){});
+
+// Admin: write, review, edit and approve this topic's quiz.
+var QZ=null;
+function qmsg(t,err){var m=$('qzmsg'); if(m){m.textContent=t||''; m.className='msg'+(err?' err':'')}}
+function drawQuiz(){
+  var nn=QZ.questions.filter(function(x){return x.x}).length, st=(QZ.status==='approved'?'Approved: students can take it':QZ.status==='draft'?'Draft: students cannot see it yet':'No quiz yet')+(QZ.questions.length?'. '+QZ.questions.length+' question'+(QZ.questions.length===1?'':'s')+' in the bank; each student gets 10 at random'+(nn?'. '+nn+' new question'+(nn===1?' is':'s are')+' waiting for your approval and not shown to students yet':''):'');
+  var h='<h3>Admin: topic quiz</h3><div>'+st+'. Most questions come from this topic\'s note, and at least 4 in 10 are application questions (a made-up fact situation). Statute questions come from the official text of provisions the note cites. Read every question before approving.</div><div class="btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" data-q="make">'+(QZ.questions.length?'Regenerate quiz':'Generate quiz')+'</button>'+(QZ.questions.length&&QZ.questions.length<30?'<button class="btn alt" data-q="more">Add 10 more questions</button><button class="btn alt" data-q="statute">Add 10 statute questions</button>':'');
+  if(QZ.questions.length) h+='<button class="btn alt" data-q="save">Save draft</button><button class="btn alt" data-q="approve">'+(QZ.status==='approved'?'Save and keep approved':'Approve for students')+'</button>'+(QZ.status==='approved'?'<button class="btn alt" data-q="unpub">Hide from students</button>':'')+'<button class="btn ghost" data-q="del">Delete quiz</button>';
+  h+='</div><div class="msg" id="qzmsg" role="status"></div>';
+  QZ.questions.forEach(function(x,i){
+    h+='<div class="kv" style="margin-top:12px" data-qi="'+i+'" data-x="'+(x.x?1:0)+'" data-k="'+(x.k||'')+'" data-src="'+esc(x.src||'')+'"><label class="f">Question '+(i+1)+(x.k==='a'?' · Application':x.k==='s'?' · Statute: '+esc(x.src||''):'')+(x.x?' · NEW, not yet approved':'')+' <button class="btn ghost" data-q="rm" data-i="'+i+'" style="padding:2px 10px;font-size:12px;margin-left:8px">Remove</button></label><textarea class="in" data-f="q" rows="2" style="min-height:0">'+esc(x.q)+'</textarea>';
+    x.o.forEach(function(t,k){ h+='<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="radio" name="qa'+i+'" value="'+k+'" aria-label="Option '+'ABCD'[k]+' is correct"'+(x.a===k?' checked':'')+' style="width:22px;height:22px;flex:none"><input class="in" data-f="o'+k+'" value="'+esc(t)+'" maxlength="250"></div>'; });
+    h+='<label class="f">Explanation shown after passing</label><textarea class="in" data-f="e" rows="2" style="min-height:0">'+esc(x.e||'')+'</textarea></div>';
+  });
+  $('quizadm').classList.remove('hidden'); $('quizadm').innerHTML=h;
+}
+function readQuiz(){
+  return Array.prototype.map.call(document.querySelectorAll('#quizadm [data-qi]'),function(d){
+    var chk=d.querySelector('input[type=radio]:checked');
+    var it={q:d.querySelector('[data-f=q]').value,o:[0,1,2,3].map(function(k){return d.querySelector('[data-f=o'+k+']').value}),a:chk?+chk.value:-1,e:d.querySelector('[data-f=e]').value}; if(d.dataset.x==='1') it.x=1; if(d.dataset.k){ it.k=d.dataset.k; if(d.dataset.src) it.src=d.dataset.src; } return it;
+  });
+}
+async function initQuizAdmin(){
+  if(isCourse) return;
+  try{ QZ=await LawLink.quizAdminGet(NOTE_ID); }catch(e){ return; }
+  drawQuiz();
+}
+$('quizadm').addEventListener('click',async function(e){
+  var b=e.target.closest('[data-q]'); if(!b) return; var a=b.dataset.q; b.disabled=true;
+  try{
+    if(a==='make'){
+      if(QZ.questions.length&&!confirm('Replace the current questions with a new set? It goes back to draft.')){ b.disabled=false; return; }
+      qmsg('Writing 10 questions from the note… this can take up to a minute.'); QZ=await LawLink.quizMake(NOTE_ID,{course:c.name,topic:topic}); drawQuiz(); qmsg('Done. Read every question, fix anything wrong, then approve.'); return;
+    }
+    if(a==='more'){ qmsg('Writing 10 more questions… this can take up to a minute.'); QZ=await LawLink.quizMake(NOTE_ID,{course:c.name,topic:topic},'add'); drawQuiz(); qmsg('Added. The new questions are marked NEW. Read them, then tap Approve to release them to students.'); return; }
+    if(a==='statute'){ qmsg('Writing questions from the official statute text… this can take up to a minute.'); QZ=await LawLink.quizMake(NOTE_ID,{course:c.name,topic:topic},'statute'); drawQuiz(); qmsg('Added. Each new question names the provision it comes from. Check it against the section, then tap Approve to release it.'); return; }
+    if(a==='rm'){ var all=readQuiz(); all.splice(+b.dataset.i,1); QZ.questions=all; drawQuiz(); qmsg('Removed from the list. Tap Save draft or Approve to keep this change.'); return; }
+    if(a==='del'){ if(!confirm('Delete this quiz?')){ b.disabled=false; return; } await LawLink.quizSave(NOTE_ID,[],'delete'); QZ={questions:[],status:'none'}; drawQuiz(); return; }
+    var qs=readQuiz(), st=a==='approve'?'approved':(a==='unpub'?'draft':(QZ.status==='approved'?'approved':'draft'));
+    if(a==='save') st='draft';
+    QZ=await LawLink.quizSave(NOTE_ID,qs,st); drawQuiz(); qmsg(st==='approved'?'Approved. Students can now take it.':'Saved as draft.');
+  }catch(x){ b.disabled=false; qmsg(x.message,true); }
+});
+LawLink.me().then(function(u){ isAdmin=u.role==='admin'; load(); if(isAdmin) initQuizAdmin(); }).catch(function(){ load(); });
+})();
+</script>
+</body>
+</html>

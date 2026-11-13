@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Goals, streak and exams</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.big{text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin:8px 0 14px}
+.big .n{font:700 44px/1 Inter,system-ui,sans-serif;color:var(--navy)}
+.big .l{color:var(--muted);margin-top:6px}
+.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;background:var(--navy)}
+:root[data-theme="dark"] .bar i{background:var(--link)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .bar i{background:var(--link)}}
+.days{display:flex;justify-content:space-between;max-width:300px;margin:14px auto 0}
+.days span{display:flex;flex-direction:column;align-items:center;gap:3px;font:600 11px Inter,system-ui,sans-serif;color:var(--muted)}
+.days svg{width:28px;height:32px;fill:none;stroke:var(--line);stroke-width:2.2}
+.days .on svg{fill:var(--brass);stroke:var(--brass)}
+.days .now svg{stroke:var(--navy)}
+.days .now.on svg{stroke:var(--gold)}
+.fld{display:block;font-weight:600;margin:16px 0 6px}
+.inp{width:100%;padding:12px;font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.row2{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.row2 b{display:block}.row2 small{color:var(--muted)}
+.chips{padding-left:0;padding-right:0}
+.hint{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back to home" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Goals, streak and exams</h1>
+  </header>
+  <main class="narrow">
+    <div class="big"><div class="n" id="sn">0</div><div class="l" id="sl">day streak</div><div class="days" id="wk" aria-label="Last 7 days"></div></div>
+    <div class="big" style="text-align:left"><b id="gt">Today</b><div class="bar"><i id="gb" style="width:0"></i></div><p class="hint" id="gs" style="margin-top:8px"></p></div>
+    <label class="fld" style="margin-top:6px">Daily goal: quizzes per day</label>
+    <div class="chips" id="gc" role="group" aria-label="Daily goal"></div>
+    <p class="hint" style="margin-top:6px">A quiz or IRAC test taken on a day keeps your streak going. Miss a whole day and it starts again.</p>
+
+    <h2 style="margin-top:26px;font-size:19px">Exam countdown</h2>
+    <div id="ex"></div>
+    <label class="fld" for="en">Add an exam</label>
+    <input class="inp" id="en" maxlength="60" placeholder="e.g. Contract Law" list="cl" autocomplete="off">
+    <datalist id="cl"></datalist>
+    <label class="fld" for="ed">Date</label>
+    <input class="inp" id="ed" type="date">
+    <div class="msg" id="em" role="status"></div>
+    <button class="btn" id="ea" style="width:100%;margin-top:8px">Add exam</button>
+
+    <h2 style="margin-top:26px;font-size:19px">Invite a friend</h2>
+    <p class="hint" style="margin:6px 0 10px">Send Lex-Tabulā to a friend in your class. Studying together helps you both.</p>
+    <button class="btn alt" id="inv" style="width:100%">Invite a friend</button>
+  </main>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+$('cl').innerHTML=COURSES.map(function(c){return '<option value="'+esc(c.name)+'">'}).join('');
+var GOALS=[1,2,3,5];
+function draw(){
+  var s=Prog.streak(), g=Prog.goal(), t=Prog.today();
+  $('sn').textContent=s; $('sl').textContent=s===1?'day streak':'day streak'+(s===0?'. Take a quiz today to start one.':'');
+  var days=Prog.get().days||{}, w='', d=new Date(); d.setDate(d.getDate()-6);
+  for(var i=0;i<7;i++){ w+='<span class="'+(days[Prog.dkey(d)]?'on ':'')+(i===6?'now':'')+'" title="'+Prog.dkey(d)+'"><svg viewBox="0 0 24 28" aria-hidden="true"><path d="M3 26V11a9 9 0 0 1 18 0v15z"/></svg>'+'SMTWTFS'.charAt(d.getDay())+'</span>'; d.setDate(d.getDate()+1); }
+  $('wk').innerHTML=w;
+  $('gb').style.width=Math.min(100,Math.round(t/g*100))+'%';
+  $('gt').textContent='Today: '+t+' of '+g+(g===1?' quiz':' quizzes');
+  $('gs').textContent=t>=g?'Goal reached. Well done.':(g-t)+' more to reach today\'s goal.';
+  $('gc').innerHTML=GOALS.map(function(n){return '<button class="chip" type="button" data-g="'+n+'" aria-pressed="'+(n===g)+'">'+n+'</button>'}).join('');
+  var ex=Prog.exams();
+  $('ex').innerHTML=ex.length?ex.map(function(x){ return '<div class="row2"><div><b>'+esc(x.n)+'</b><small>'+(x.days<0?'Done':x.days===0?'Today':x.days===1?'Tomorrow':'In '+x.days+' days')+' · '+esc(x.d)+'</small></div><button class="btn alt" data-n="'+esc(x.n)+'" data-d="'+esc(x.d)+'">Remove</button></div>'; }).join(''):'<p class="hint">No exams added yet.</p>';
+}
+$('gc').onclick=function(e){ var b=e.target.closest('[data-g]'); if(b){ Prog.setGoal(+b.dataset.g); draw(); } };
+$('ex').onclick=function(e){ var b=e.target.closest('[data-n]'); if(b){ Prog.delExam(b.dataset.n,b.dataset.d); draw(); } };
+$('ea').onclick=function(){
+  var n=$('en').value.trim(), d=$('ed').value;
+  if(!n||!d){ $('em').textContent='Add the exam name and its date.'; return; }
+  Prog.addExam(n,d); $('en').value=''; $('ed').value=''; $('em').textContent=''; draw();
+};
+$('inv').onclick=function(){ inviteFriend(); };
+draw();
+})();
+</script>
+</body>
+</html>

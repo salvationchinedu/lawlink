@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LawLink – Statutes</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Lex-Tabulā – Statutes</title>
 <link rel="stylesheet" href="style.css">
 <script src="ui.js"></script>
 </head>
@@ -45,13 +44,17 @@
 var $=function(i){return document.getElementById(i)};
 if(!getToken()){ location.replace('login.html'); return; }
 var kind=new URLSearchParams(location.search).get('k')==='cases'?'case':'auth', isAdmin=false, all=[], filter='all', loaded=false, found=null, foundQ='', timer=null;
-var TYPES={const:'Constitution',act:'Federal Acts',state:'State laws',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International'};
+var TYPES={const:'Constitution',act:'Federal Acts',state:'State laws',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International',max:'Maxims of Equity'};
+var ORDER=['const','act','state','rule','sub','eng','intl','max'];
 var ST={cited:'Not written yet',generated:'Ready',verified:'✓ Verified',unverifiable:'Could not be verified'};
 var NOUN=kind==='case'?'case':'law';
 $('hd').textContent=kind==='case'?'Cases':'Statutes';
-document.title='LawLink – '+$('hd').textContent;
+document.title='Lex-Tabulā – '+$('hd').textContent;
 $('q').placeholder=kind==='case'?'Search cases':'Search, e.g. evidence act 84';
 
+var AZ=new Intl.Collator('en',{numeric:true,sensitivity:'base'});
+function ready(x){ return x.status==='generated'||x.status==='verified'; }
+function sortName(n){ return String(n||'').replace(/^the\s+/i,'').replace(/^[^A-Za-z0-9]+/,''); }
 function visible(){ return all.filter(function(x){ return isAdmin||x.status==='generated'||x.status==='verified'; }); }
 function okRow(x){ return isAdmin||x.status==='generated'||x.status==='verified'; }
 function renderFound(){
@@ -59,8 +62,9 @@ function renderFound(){
   $('chips').classList.add('hidden');
   $('count').textContent=(secs.length+laws.length)+' result'+(secs.length+laws.length===1?'':'s');
   var h='';
+  var sub=(found&&found.sub)||'';
   if(secs.length) h+='<div class="gh">Sections</div>'+secs.map(function(s){
-    return '<a class="crow" href="authority.html?id='+encodeURIComponent(s.id)+'"><strong>'+esc(s.name)+'</strong><span class="m">'+esc(s.heading||(isAdmin?ST[s.status]:'')||'')+'</span></a>';
+    return '<a class="crow" href="authority.html?id='+encodeURIComponent(s.id)+(sub?'&s='+encodeURIComponent('s. '+String(s.id).split(':')[3]+sub):'')+'"><strong>'+esc(s.name)+(sub?' '+esc(sub):'')+'</strong><span class="m">'+esc(s.heading||(isAdmin?ST[s.status]:'')||'')+'</span></a>';
   }).join('');
   if(laws.length) h+='<div class="gh">'+(secs.length?'Laws':'Matching laws')+'</div>'+laws.map(function(x){
     return '<a class="crow" href="authority.html?id='+encodeURIComponent(x.id)+'"><strong>'+esc(x.name)+'</strong><span class="m">'+esc(TYPES[x.type]||'')+'</span></a>';
@@ -75,7 +79,8 @@ function render(){
   var list=visible();
   if(kind!=='case'){
     var seen={}, chips=[['all','All']];
-    list.forEach(function(x){ if(!seen[x.type]&&TYPES[x.type]){seen[x.type]=1; chips.push([x.type,TYPES[x.type]]);} });
+    list.forEach(function(x){ if(TYPES[x.type]) seen[x.type]=1; });
+    ORDER.forEach(function(t){ if(seen[t]) chips.push([t,TYPES[t]]); });
     if(chips.every(function(c){return c[0]!==filter})) filter='all';
     $('chips').innerHTML=chips.map(function(c){return '<button class="chip" aria-pressed="'+(c[0]===filter)+'" data-t="'+c[0]+'">'+esc(c[1])+'</button>'}).join('');
   }else $('chips').classList.add('hidden');
@@ -86,12 +91,26 @@ function render(){
     $('list').innerHTML=loaded?'<div class="empty"><h3>'+(list.length?'Nothing matches':'Nothing here yet')+'</h3><p>'+(list.length?'Try a different word.':(kind==='case'?'Cases appear here after they have been written up.':'Pages appear here after they have been written up.'))+'</p></div>':'';
     return;
   }
-  $('list').innerHTML=r.map(function(x){
-    var href=(kind==='case'?'case.html?id=':'authority.html?id=')+encodeURIComponent(x.id);
-    var tag=kind==='case'?'':(TYPES[x.type]||'');
-    var st=isAdmin||x.status==='verified'?ST[x.status]||'':'';
-    return '<a class="crow" href="'+href+'"><strong>'+esc(x.name)+'</strong><span class="m">'+esc([tag,st].filter(Boolean).join(' · '))+'</span></a>';
-  }).join('');
+  if(kind==='case'){
+    $('list').innerHTML=r.map(function(x){
+      var st=isAdmin||x.status==='verified'?ST[x.status]||'':'';
+      return '<a class="crow" href="case.html?id='+encodeURIComponent(x.id)+'"><strong>'+esc(x.name)+'</strong><span class="m">'+esc(st)+'</span></a>';
+    }).join('');
+    return;
+  }
+  // Statutes: one group per kind of law. Inside a group A to Z, finished pages first, pages not written yet last (only the admin sees those).
+  var by={};
+  r.forEach(function(x){ (by[x.type]=by[x.type]||[]).push(x); });
+  var h='';
+  ORDER.forEach(function(t){
+    var g=by[t]; if(!g) return;
+    g.sort(function(a,b){ return (ready(a)?0:1)-(ready(b)?0:1)||AZ.compare(sortName(a.name),sortName(b.name)); });
+    h+='<div class="gh">'+esc(TYPES[t])+' <span class="m">'+g.length+'</span></div>'+g.map(function(x){
+      var st=isAdmin||x.status==='verified'?ST[x.status]||'':'';
+      return '<a class="crow" href="authority.html?id='+encodeURIComponent(x.id)+'"><strong>'+esc(x.name)+'</strong>'+(st?'<span class="m">'+esc(st)+'</span>':'')+'</a>';
+    }).join('');
+  });
+  $('list').innerHTML=h;
 }
 // A search with a number in it ("evidence act 84") asks the database for sections. No Gemini is used.
 function search(){
@@ -111,8 +130,12 @@ $('chips').onclick=function(e){var b=e.target.closest('.chip'); if(b){filter=b.d
 function adminPanel(){
   var pre=new URLSearchParams(location.search).get('add')||'';
   $('adm').classList.remove('hidden');
-  $('adm').innerHTML='<h3>Admin</h3><div class="also">Start with the standard list, or add one law by name. Students see a law only after you write it.</div>'+
-    '<div class="btns"><button class="btn" data-a="std">Add standard laws</button></div>'+
+  $('adm').innerHTML='<h3>Admin</h3><div class="also">The library holds the Constitution. You can add other laws by name or by importing a file. Students see a law only after it is written.</div>'+
+    '<div class="btns"><button class="btn" data-a="std">Add the Constitution</button><button class="btn ghost" data-a="purge">Remove every law except the Constitution</button></div>'+
+    '<h3 style="margin-top:20px">Maxims of Equity</h3><div class="also">Adds the 16 classic maxims, each as its own page, written in plain words. They show as not yet verified until you check them against your textbook and tap Verify. Tapping again refreshes the wording of any you have not verified, and never changes one you have verified.</div>'+
+    '<div class="btns"><button class="btn" data-a="max">Add the Maxims of Equity</button></div>'+
+    '<h3 style="margin-top:20px">Link the Acts in your notes</h3><div class="also">Reads every note and makes each Act, rule, regulation, treaty and the Constitution it names tappable, so it appears in this list. It does not change a word and it does not use Gemini. Tap Preview first to see what would be linked.</div>'+
+    '<div class="btns"><button class="btn alt" data-a="mprev">Preview (changes nothing)</button><button class="btn" data-a="mrun">Link laws in all notes</button></div><div class="msg" id="mmsg" role="status"></div>'+
     '<label class="f" for="nl">Add a law</label><input class="in" id="nl" maxlength="200" placeholder="e.g. Federal Road Safety Corps Act" value="'+esc(pre)+'">'+
     '<select class="in" id="nt" aria-label="Type of law" style="margin-top:8px"><option value="">Let Gemini decide the type</option><option value="act">Federal Act</option><option value="const">Constitution</option><option value="state">State law</option><option value="rule">Court rules</option><option value="sub">Agency rules</option><option value="eng">English law</option><option value="intl">International</option></select>'+
     '<label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-size:14px"><input type="checkbox" id="nsk"> Skip the Gemini check (use when Gemini is busy or its limit is used up)</label>'+
@@ -128,8 +151,38 @@ function casePanel(){
     '<div class="btns"><button class="btn alt" data-a="case">Add case</button></div><div class="msg" id="amsg" role="status"></div>';
 }
 function say(t,err,html){ var m=$('amsg'); m.className='msg'+(err?' err':''); if(html) m.innerHTML=t; else m.textContent=t; }
+var marking=false;
+// Walks through the notes one at a time. Safe to stop and start again: a note that is already linked is not changed twice.
+async function markAll(dry){
+  if(marking) return; marking=true;
+  var btns=document.querySelectorAll('[data-a="mprev"],[data-a="mrun"]'), m=$('mmsg'), i;
+  for(i=0;i<btns.length;i++) btns[i].disabled=true;
+  function put(t,err){ m.className='msg'+(err?' err':''); m.textContent=t; }
+  var after='', resume='', n=0, total=0, linked=0, notes=0, samples=[], seen={};
+  try{
+    put('Starting…');
+    for(;;){
+      var r=await LawLink.markNext(after,dry,resume);
+      if(r.done) break;
+      if(r.resume&&r.resume===resume) throw new Error('The server did not move on.');
+      if(!total&&r.total) total=r.total;
+      after=r.next; resume=r.resume||''; if(!resume) n++; // a big note comes back in pieces; it counts when its last piece is done
+      linked+=r.linked||0; if(r.linked&&!seen[r.next]){ seen[r.next]=1; notes++; }
+      (r.samples||[]).forEach(function(x){ if(samples.length<6&&samples.indexOf(x)<0) samples.push(x); });
+      put((dry?'Checking':'Linking')+' note '+(n+(resume?1:0))+(total?' of '+total:'')+'… '+linked+' found so far');
+    }
+    if(!dry){ all=await LawLink.listAuth(kind,true); render(); }
+    if(!n) put('There are no notes yet.');
+    else if(!linked) put('Checked '+n+' note'+(n===1?'':'s')+'. Every law that is named is already linked.');
+    else put((dry?'Preview: ':'Done. ')+linked+' mention'+(linked===1?'':'s')+(dry?' would be linked':' linked')+' in '+notes+' of '+n+' notes. For example: '+samples.join('; ')+'.'+(dry?' Nothing was changed. Tap Link laws in all notes to apply it.':' Laws that were not in the list before now appear below as Not written yet.'));
+  }catch(x){ put((n?'Stopped at note '+n+'. ':'')+x.message+' Tap the button again to continue; notes that are done are not changed twice.',true); }
+  for(i=0;i<btns.length;i++) btns[i].disabled=false;
+  marking=false;
+}
 $('adm').addEventListener('click',async function(e){
   var b=e.target.closest('[data-a]'); if(!b) return; var a=b.dataset.a;
+  if(a==='mprev'){ markAll(true); return; }
+  if(a==='mrun'){ if(confirm('This links the Acts, rules and treaties named in every note. No words are changed. Continue?')) markAll(false); return; }
   if(a==='case'){
     var cn=$('cnm').value.trim(); if(cn.length<5){ say('Type the full case name.',true); return; }
     b.disabled=true; say('Adding…');
@@ -137,9 +190,21 @@ $('adm').addEventListener('click',async function(e){
       say((cr.existed?'Already in the list: ':'Added: ')+'<a class="auth" href="case.html?id='+encodeURIComponent(cr.id)+'">'+esc(cr.name)+'</a>. Open it to write the page.',false,true); }
     catch(x){ say(x.message,true); } b.disabled=false; return;
   }
+  if(a==='purge'){
+    if(!confirm('This removes every law and section except the Constitution. Notes and cases are not touched. This cannot be undone. Continue?')) return;
+    var word=prompt('Type DELETE to confirm.'); if(word!=='DELETE'){ say('Cancelled.',true); return; }
+    b.disabled=true; say('Removing…');
+    try{ var pr=await LawLink.purgeLaws('DELETE'); all=await LawLink.listAuth(kind,true); render(); say('Done. '+pr.removed+' law entries removed. Only the Constitution is left.'); }
+    catch(x){ say(x.message,true); } b.disabled=false; return;
+  }
+  if(a==='max'){
+    b.disabled=true; say('Adding the maxims…');
+    try{ var mr=await LawLink.addMaxims(); all=await LawLink.listAuth(kind,true); render(); say(mr.added||mr.updated?(mr.added?mr.added+' maxim'+(mr.added===1?'':'s')+' added. ':'')+(mr.updated?mr.updated+' refreshed. ':'')+'Open Maxims of Equity below to check and verify them.':'All '+mr.total+' maxims are already there.'); }
+    catch(x){ say(x.message,true); } b.disabled=false; return;
+  }
   if(a==='std'){
     b.disabled=true; say('Adding the standard list…');
-    try{ var r=await LawLink.addStandard(); all=await LawLink.listAuth(kind,true); render(); say(r.added?('Added '+r.added+' laws. Open one to write its overview.'):'The standard list is already there.'); }
+    try{ var r=await LawLink.addStandard(); all=await LawLink.listAuth(kind,true); render(); say(r.added?'The Constitution was added.':'The Constitution is already there.'); }
     catch(x){ say(x.message,true); } b.disabled=false;
   }else if(a==='add'){
     var nm=$('nl').value.trim(); if(nm.length<4){ say('Type the name of the law first.',true); return; }
@@ -156,11 +221,15 @@ document.addEventListener('change',async function(e){
   var secs=Array.isArray(p.sections)?p.sections:[];
   if(!p.name||!secs.length){ say('That file has no law name or no sections.',true); return; }
   var done=0, skipped=0, flagged=0, last=null;
+  // Small pieces: at most 40 sections and about 60 KB each, so a request stays light even for the long Schedules.
+  var parts=[], cur=[], size=0, enc=new TextEncoder(), gone=0;
+  secs.forEach(function(x){ var n=enc.encode(JSON.stringify(x)).length; if(cur.length&&(cur.length>=40||size+n>60000)){ parts.push(cur); cur=[]; size=0; } cur.push(x); size+=n; });
+  if(cur.length) parts.push(cur);
   try{
-    for(var i=0;i<secs.length;i+=40){
-      say('Importing '+Math.min(i+40,secs.length)+' of '+secs.length+' sections…');
-      var r=await LawLink.importLaw({name:p.name,type:p.type,meta:i===0?p.meta:null,complete:i+40>=secs.length,sections:secs.slice(i,i+40)});
-      done+=r.imported; skipped+=r.skipped; flagged+=r.flagged||0; last=r;
+    for(var i=0;i<parts.length;i++){
+      say('Importing '+(gone+parts[i].length)+' of '+secs.length+' sections…');
+      var r=await LawLink.importLaw({name:p.name,type:p.type,meta:i===0?p.meta:null,complete:i===parts.length-1,sections:parts[i]});
+      done+=r.imported; skipped+=r.skipped; flagged+=r.flagged||0; last=r; gone+=parts[i].length;
     }
     all=await LawLink.listAuth(kind,true); render();
     say('Done. '+done+' sections imported'+(skipped?' ('+skipped+' skipped because they were empty)':'')+'.'+(flagged?' '+flagged+' section'+(flagged===1?'':'s')+' cited in notes do not exist in this law. See the Admin inbox.':'')+' <a class="auth" href="authority.html?id='+encodeURIComponent(last.id)+'">Open '+esc(last.name)+'</a>',false,true);

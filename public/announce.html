@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Post an announcement</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.fld{display:block;font-weight:600;margin:14px 0 6px}
+.inp{width:100%;padding:12px;font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+textarea.inp{min-height:120px;resize:vertical}
+.hint{color:var(--muted);font-size:14px;margin-top:4px}
+.row2{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.row2 b{display:block}
+.row2 small{color:var(--muted)}
+.row2 .rb{display:flex;gap:8px;flex:none}
+.row2 .rb .btn{padding:9px 14px;font-size:14px}
+.notify{margin:16px 0 4px}
+.notify .sw{border-bottom:0;padding-bottom:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="settings.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Announcements</h1>
+  </header>
+  <main id="main" class="narrow">
+    <div id="deny" class="empty hidden"><h3>Admins only</h3><p>This page is for the admin.</p></div>
+    <div id="box" class="hidden">
+      <p class="hint" style="margin:0 0 4px">What you post here appears on every student's home page and in their Announcements list.</p>
+      <div class="pushnote hidden" id="editbar"><span id="edittxt"></span> <button class="btn alt" id="cancel" type="button" style="padding:7px 12px;font-size:14px;margin-left:6px">Cancel</button></div>
+      <label class="fld" for="t">Title</label><input class="inp" id="t" maxlength="80" placeholder="e.g. Exams start Monday">
+      <label class="fld" for="b">Message</label><textarea class="inp" id="b" maxlength="1000" placeholder="Write the message"></textarea>
+      <label class="fld" for="l">Link (optional)</label><input class="inp" id="l" maxlength="300" placeholder="https://… or a page like subscribe.html" autocapitalize="none" autocomplete="off">
+      <label class="fld" for="ll">Button label (optional)</label><input class="inp" id="ll" maxlength="30" placeholder="e.g. Open">
+      <label class="fld" for="d">Days it stays visible (0 = until you delete it)</label><input class="inp" id="d" inputmode="numeric" maxlength="3" value="14" style="width:110px">
+      <div class="notify" id="notify">
+        <label class="sw"><input type="checkbox" id="np"><span><b>Also send as a notification</b><small id="npinfo">Checking…</small></span></label>
+      </div>
+      <div class="btns"><button class="btn" id="post" type="button">Post announcement</button></div>
+      <div class="msg" id="msg" role="status"></div>
+      <h2 style="margin-top:26px;font-size:19px">Posted</h2>
+      <div id="list"><p class="hint">Loading…</p></div>
+    </div>
+  </main>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!LawLink.loggedIn()){ location.replace('login.html?next=announce.html'); return; }
+var rows=[], editing=0, info=null, armed=false, busy=false;
+function fmt(ts){ return new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
+function msg(t,err){ var m=$('msg'); m.className='msg'+(err?' err':t?' ok':''); m.textContent=t||''; }
+function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
+function draw(){
+  LawLink.annAdminList().then(function(list){
+    rows=list;
+    $('list').innerHTML=rows.length?rows.map(function(a){
+      var live=!a.ends||a.ends>Date.now();
+      return '<div class="row2"><div><b>'+esc(a.title)+'</b><small>'+fmt(a.at)+' · '+(a.ends?(live?'until '+fmt(a.ends):'ended '+fmt(a.ends)):'until deleted')+'</small></div><div class="rb"><button class="btn alt" data-edit="'+a.id+'" type="button">Edit</button><button class="btn alt" data-id="'+a.id+'" type="button">Delete</button></div></div>';
+    }).join(''):'<p class="hint">Nothing posted yet.</p>';
+    Array.prototype.forEach.call($('list').querySelectorAll('button[data-id]'),function(b){ b.onclick=async function(){ if(!confirm('Delete this announcement?')) return; b.disabled=true; try{ await LawLink.annDelete(Number(b.dataset.id)); if(editing===Number(b.dataset.id)) leaveEdit(); draw(); }catch(e){ b.disabled=false; alert(e.message); } }; });
+    Array.prototype.forEach.call($('list').querySelectorAll('button[data-edit]'),function(b){ b.onclick=function(){ startEdit(Number(b.dataset.edit)); }; });
+  }).catch(function(e){ $('list').innerHTML='<p class="hint">'+esc(e.message)+'</p>'; });
+}
+// ---- How many phones would be told ----
+function loadInfo(){
+  return LawLink.pushInfo().then(function(i){ info=i; }).catch(function(){ info=null; }).then(paintInfo);
+}
+function paintInfo(){
+  var cb=$('np'), t=$('npinfo');
+  if(!info){ cb.checked=false; cb.disabled=true; t.textContent='Notifications are not available right now.'; return; }
+  if(!info.news){ cb.checked=false; cb.disabled=true; t.textContent=info.phones?'No student wants announcements as notifications yet.':'No student has turned on notifications yet. They can do it in Settings.'; return; }
+  cb.disabled=false; if(!armed&&!editing&&!cb.dataset.touched) cb.checked=true;
+  var s='This will reach '+plural(info.news,'phone')+' ('+plural(info.students,'student')+' have notifications on).';
+  if(info.bc&&!info.bc.done) s+=' An earlier notification is still being sent ('+info.bc.sent+' of '+info.bc.total+').';
+  else if(info.last&&Date.now()-info.last<20*3600000) s+=' Another one went out less than a day ago.';
+  t.textContent=s;
+}
+$('np').onchange=function(){ $('np').dataset.touched='1'; armed=false; if(!editing) $('post').textContent='Post announcement'; msg(''); };
+// ---- Editing ----
+function startEdit(id){
+  var a=rows.filter(function(x){return x.id===id})[0]; if(!a) return;
+  editing=id; armed=false;
+  $('t').value=a.title; $('b').value=a.body; $('l').value=a.link||''; $('ll').value=a.link?(a.linkLabel||''):'';
+  var left=a.ends&&a.ends>Date.now()?Math.ceil((a.ends-Date.now())/86400000):(a.ends?14:0);
+  $('d').value=String(left);
+  $('edittxt').textContent='Editing “'+a.title+'”.'+(a.ends&&a.ends<=Date.now()?' It had ended: saving shows it again for the days you set.':' Students see the change as soon as you save.');
+  $('editbar').classList.remove('hidden'); $('notify').classList.add('hidden');
+  $('post').textContent='Save changes'; msg('');
+  window.scrollTo(0,0); $('t').focus();
+}
+function leaveEdit(){
+  editing=0; armed=false;
+  ['t','b','l','ll'].forEach(function(i){ $(i).value=''; }); $('d').value='14';
+  $('editbar').classList.add('hidden'); $('notify').classList.remove('hidden'); $('post').textContent='Post announcement';
+  paintInfo();
+}
+$('cancel').onclick=function(){ leaveEdit(); msg(''); };
+// ---- Sending the notification in small groups, so it stays inside Cloudflare's limits ----
+async function sendAll(total){
+  var sent=0, tries=0;
+  for(;;){
+    var r=await LawLink.pushSend(); tries++;
+    sent=r.sent||sent;
+    msg('Sending notifications… '+Math.min(sent,total)+' of '+total);
+    if(r.done) return sent;
+    if(r.busy) await new Promise(function(res){ setTimeout(res,1200); });
+    if(tries>500) return sent;
+  }
+}
+$('post').onclick=async function(){
+  var b=$('post'); if(busy) return;
+  msg('');
+  var f={ title:$('t').value, body:$('b').value, link:$('l').value, linkLabel:$('ll').value, days:Number($('d').value||0) };
+  if(editing){
+    busy=true; b.disabled=true;
+    try{ f.id=editing; await LawLink.annEdit(f); leaveEdit(); msg('Saved. Students see the change now.'); draw(); }
+    catch(e){ msg(e.message,true); }
+    busy=false; b.disabled=false; return;
+  }
+  var want=!$('np').disabled&&$('np').checked;
+  if(want&&info&&!armed&&((info.bc&&!info.bc.done)||(info.last&&Date.now()-info.last<20*3600000))){
+    armed=true; b.textContent='Post and notify again';
+    msg('A notification went out less than a day ago. Press the button again to send another, or untick “Also send as a notification” to post quietly.',true); return;
+  }
+  busy=true; b.disabled=true;
+  try{
+    f.push=want;
+    var r=await LawLink.annAdd(f);
+    ['t','b','l','ll'].forEach(function(i){ $(i).value=''; }); $('d').value='14'; armed=false; b.textContent='Post announcement';
+    var total=r&&r.push?r.push.total:0;
+    if(want&&total>0){
+      msg('Posted. Sending notifications… 0 of '+total);
+      try{ var n=await sendAll(total); msg('Posted. The notification was sent to '+plural(n,'phone')+'.'); }
+      catch(e){ msg('Posted. The notification is still going out and will finish within a few minutes.'); }
+    }else if(want){ msg('Posted. No phone is set up to receive announcements yet, so no notification was sent.'); }
+    else msg('Posted. Students will see it on their home page.');
+    draw(); loadInfo();
+  }catch(e){ msg(e.message,true); }
+  busy=false; b.disabled=false;
+};
+LawLink.me().then(function(u){
+  if(u.role!=='admin'){ $('deny').classList.remove('hidden'); return; }
+  $('box').classList.remove('hidden'); draw(); loadInfo();
+});
+})();
+</script>
+</body>
+</html>

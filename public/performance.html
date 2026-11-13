@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Performance analysis</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.pf{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:10px}
+.pf label{font-weight:600;min-width:64px}
+.pf select{flex:1;font:inherit;color:var(--text);background:transparent;border:0;padding:10px 4px;min-width:0}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0;text-align:center}
+.pcard h2{font-size:17px;margin-bottom:8px}
+.pcard svg{width:100%;height:auto;stroke-width:1}
+:root{--ch-ok:#1C5848;--ch-mid:#B5842A;--ch-low:#963030;--ch-line:#1C5848;--ch-dot:#CFA851}
+:root[data-theme="dark"]{--ch-ok:#5BC4A2;--ch-mid:#E0B65A;--ch-low:#EE9A9A;--ch-line:#80D2B9;--ch-dot:#E0B65A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ch-ok:#5BC4A2;--ch-mid:#E0B65A;--ch-low:#EE9A9A;--ch-line:#80D2B9;--ch-dot:#E0B65A}}
+.dn{max-width:220px;margin:0 auto;display:block}
+.cap{color:var(--muted);font-size:13px;margin-top:6px}
+.ptab{width:100%;border-collapse:collapse;text-align:left;font-size:15px}
+.ptab th{background:var(--navy);color:var(--on-navy);padding:10px;font-weight:600}
+.ptab td{padding:10px;border-top:1px solid var(--line)}
+.ptab td:last-child,.ptab th:last-child{text-align:right;white-space:nowrap}
+.ptab tr.g td{background:rgba(107,158,127,.18)}
+.ptab tr.a td{background:rgba(201,162,75,.18)}
+.ptab tr.r td{background:rgba(169,68,66,.14)}
+.ptab a{color:var(--link)}
+.share{display:flex;gap:8px}
+.share button{background:rgba(255,255,255,.12);color:inherit}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="progress.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Performance analysis</h1>
+    <div class="share">
+      <button class="ib" id="sh" aria-label="Share my results"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></svg></button>
+      <button class="ib" id="dl" aria-label="Download my results"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button>
+    </div>
+  </header>
+  <main>
+    <div class="pf"><label for="sub">Subject</label><select id="sub"></select></div>
+    <div class="pf"><label for="trd">Trend</label><select id="trd"><option value="s">Score</option><option value="p">Pass rate</option><option value="b">Best so far</option></select></div>
+    <div class="pf"><label for="tst">Test</label><select id="tst"><option value="">Quizzes and IRAC</option><option value="q">Topic quizzes only</option><option value="i">IRAC tests only</option></select></div>
+    <div id="out"></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var PASS=80, P=Prog.get();
+var NAME={}; COURSES.forEach(function(c){NAME[c.id]=c.name});
+function cname(id){return NAME[id]||id||'Other'}
+// Every attempt: from the saved history, plus one point per older result that has no history yet.
+var H=(P.hist||[]).slice(), seen={};
+H.forEach(function(h){seen[h.k+'|'+h.c]=(seen[h.k+'|'+h.c]||0)+1});
+function seed(o,k){ for(var id in (o||{})){ var r=o[id]; if(!r||r.l==null) continue; var c=k==='q'?(id.split(':')[1]||''):id.split(':')[0]; if(k==='i'&&id.indexOf(':')<0) c=id; if(!H.some(function(h){return h.k===k&&h.c===c&&Math.abs(h.t-r.t)<2000})) H.push({k:k,c:c,s:r.l,t:r.t||0}); } }
+if(!H.length){ seed(P.quiz,'q'); seed(P.irac,'i'); }
+H.sort(function(a,b){return a.t-b.t});
+var subs={}; H.forEach(function(h){subs[h.c]=1});
+var ids=Object.keys(subs).sort(function(a,b){return cname(a).localeCompare(cname(b))});
+$('sub').innerHTML='<option value="">All subjects</option>'+ids.map(function(i){return '<option value="'+esc(i)+'">'+esc(cname(i))+'</option>'}).join('');
+function mean(a){return a.length?a.reduce(function(x,y){return x+y},0)/a.length:0}
+function fmt(n){return (Math.round(n*10)/10).toString()}
+function cur(){ var s=$('sub').value, t=$('tst').value; return H.filter(function(h){return (!s||h.c===s)&&(!t||h.k===t)}); }
+function donut(pct){
+  var r=52,C=2*Math.PI*r,d=C*Math.max(0,Math.min(100,pct))/100,col=pct>=PASS?'var(--ch-ok)':pct>=50?'var(--ch-mid)':'var(--ch-low)';
+  return '<svg class="dn" viewBox="0 0 140 140" role="img" aria-label="Mean score '+fmt(pct)+' percent"><circle cx="70" cy="70" r="'+r+'" fill="none" stroke="#bbb" stroke-opacity=".45" stroke-width="18"/><circle cx="70" cy="70" r="'+r+'" fill="none" style="stroke:'+col+'" stroke-width="18" stroke-dasharray="'+d+' '+C+'" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" font-size="26" font-weight="600" fill="currentColor" stroke="none">'+Math.round(pct)+'%</text></svg>';
+}
+function series(rows,mode){
+  var out=[],n=0,pass=0,best=0;
+  rows.forEach(function(h){ n++; if(h.s>=PASS) pass++; best=Math.max(best,h.s); out.push(mode==='p'?pass/n*100:mode==='b'?best:h.s); });
+  return out;
+}
+function line(vals,label){
+  if(vals.length<2) return '<p class="cap">Take at least two quizzes to see a trend.</p>';
+  var W=340,Hh=190,L=34,R=10,T=10,B=26,pw=W-L-R,ph=Hh-T-B,N=vals.length;
+  function X(i){return L+pw*i/(N-1)} function Y(v){return T+ph*(1-v/100)}
+  var g='',i,pts=vals.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1)}).join(' ');
+  [0,20,40,60,80,100].forEach(function(v){ g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="currentColor" stroke-opacity="'+(v===PASS?'.5':'.15')+'" '+(v===PASS?'stroke-dasharray="4 3"':'')+'/><text x="'+(L-5)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="currentColor" stroke="none">'+v+'</text>'; });
+  var step=Math.max(1,Math.ceil(N/7)); for(i=0;i<N;i+=step) g+='<text x="'+X(i)+'" y="'+(Hh-8)+'" text-anchor="middle" font-size="11" fill="currentColor" stroke="none">'+(i+1)+'</text>';
+  var area='M'+X(0)+','+Y(0)+' L'+pts.replace(/ /g,' L')+' L'+X(N-1)+','+Y(0)+'Z';
+  var dots=vals.map(function(v,i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3.5" style="fill:var(--ch-dot)" stroke="none"/>'}).join('');
+  return '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+label+' across '+N+' attempts">'+g+'<path d="'+area+'" style="fill:var(--ch-dot)" fill-opacity=".18" stroke="none"/><polyline points="'+pts+'" fill="none" style="stroke:var(--ch-line)" stroke-width="2.2" stroke-linejoin="round"/>'+dots+'</svg><p class="cap">Attempt number across the bottom. The dashed line is the '+PASS+'% pass mark.</p>';
+}
+var TABLE=[];
+function draw(){
+  var rows=cur(), tr=$('trd').value, out=$('out');
+  if(!H.length){ out.innerHTML='<div class="empty"><h3>No results yet</h3><p>Take a topic quiz or an IRAC test and your analysis will appear here.</p><a class="btn" href="courses.html">Browse courses</a></div>'; TABLE=[]; return; }
+  if(!rows.length){ out.innerHTML='<div class="empty"><h3>No results for this choice</h3><p>Try another subject or test type.</p></div>'; TABLE=[]; return; }
+  var sc=rows.map(function(h){return h.s}), m=mean(sc), by={};
+  rows.forEach(function(h){(by[h.c]=by[h.c]||[]).push(h.s)});
+  TABLE=Object.keys(by).map(function(c){return {id:c,name:cname(c),mean:mean(by[c]),n:by[c].length,best:Math.max.apply(null,by[c])}}).sort(function(a,b){return b.mean-a.mean});
+  var tl={s:'Score of each attempt',p:'Pass rate so far',b:'Best score so far'}[tr];
+  out.innerHTML='<div class="pcard"><h2>Mean aggregate score</h2>'+donut(m)+'<p class="cap">'+rows.length+' attempt'+(rows.length===1?'':'s')+' · '+sc.filter(function(x){return x>=PASS}).length+' passed (80% or more)</p></div>'+
+   '<div class="pcard"><h2>'+tl+'</h2>'+line(series(rows,tr),tl)+'</div>'+
+   '<div class="pcard"><h2>Subject analysis</h2><table class="ptab"><thead><tr><th>Name</th><th>Mean score</th></tr></thead><tbody>'+TABLE.map(function(r){return '<tr class="'+(r.mean>=PASS?'g':r.mean>=50?'a':'r')+'"><td><a href="course.html?id='+encodeURIComponent(r.id)+'">'+esc(r.name)+'</a><div class="cap" style="margin:0">'+r.n+' attempt'+(r.n===1?'':'s')+' · best '+r.best+'%</div></td><td>'+fmt(r.mean)+'%</td></tr>'}).join('')+'</tbody></table><p class="cap">Green is 80% or more, gold is 50–79%, red is below 50%.</p></div>';
+}
+function summary(){
+  var rows=cur(); if(!rows.length) return '';
+  var m=mean(rows.map(function(h){return h.s}));
+  return 'My Lex-Tabulā performance: '+fmt(m)+'% average over '+rows.length+' attempts.\n'+TABLE.map(function(r){return r.name+': '+fmt(r.mean)+'%'}).join('\n');
+}
+$('sub').onchange=$('trd').onchange=$('tst').onchange=draw;
+$('sh').onclick=function(){
+  var t=summary(); if(!t) return;
+  if(navigator.share) navigator.share({title:'My Lex-Tabulā performance',text:t}).catch(function(){});
+  else if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){alert('Copied. Paste it into any chat.')},function(){alert(t)});
+  else alert(t);
+};
+$('dl').onclick=function(){
+  var rows=cur(); if(!rows.length) return;
+  var csv='Date,Subject,Test,Score %\n'+rows.map(function(h){return [new Date(h.t).toISOString().slice(0,10),'"'+cname(h.c).replace(/"/g,'""')+'"',h.k==='i'?'IRAC':'Quiz',h.s].join(',')}).join('\n')+'\n\nSubject,Mean score %,Attempts\n'+TABLE.map(function(r){return '"'+r.name.replace(/"/g,'""')+'",'+fmt(r.mean)+','+r.n}).join('\n');
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='lawlink-performance.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+};
+draw();
+})();
+</script>
+</body>
+</html>

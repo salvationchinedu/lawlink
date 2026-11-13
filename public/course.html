@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LawLink – Course</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Lex-Tabulā – Course</title>
 <link rel="stylesheet" href="style.css">
 <script src="ui.js"></script>
 </head>
@@ -16,8 +15,10 @@
   </header>
   <main>
     <div class="cinfo" id="info"></div>
+    <div id="cstate"></div>
     <a class="crow" id="cnote" href="note.html?c="><strong>Course note</strong><span class="m" id="cnotem">Overview, scope and study guide</span></a>
     <div class="adm hidden" id="scan"></div>
+    <div class="adm hidden" id="bulk"></div>
     <div class="adm hidden" id="edit"></div>
     <div class="tabs" id="tabs" role="tablist"></div>
     <ol class="topics" id="topics"></ol>
@@ -47,15 +48,17 @@ if(!c){
   $('empty').innerHTML='<div class="soonbox"><h3>We could not find that course</h3><p><a href="courses.html" class="btn" style="text-decoration:none;margin-top:12px">Back to courses</a></p></div>';
   return;
 }
-document.title='LawLink – '+c.name;
+document.title='Lex-Tabulā – '+c.name;
 $('cnote').href='note.html?c='+encodeURIComponent(c.id);
 $('title').textContent=c.name;
 
-var info='';
-if(c.cle===2) info+='<span class="pill tip">★ CLE required</span>'; else if(c.cle===1) info+='<span class="pill">† Listed by some sources</span>';
-if(c.aliases.length) info+='<div class="also">Also called: '+c.aliases.map(esc).join(', ')+'</div>';
-info+='<div class="legend" style="margin:10px 0 4px">My category (only you see this)</div><div id="mytag" class="tagrow" role="group" aria-label="My category"></div>';
-info+='<div class="btns" style="margin-top:10px;align-items:center"><button class="btn alt" id="save">Save course</button><span class="msg" id="prog" style="margin:0"></span></div>';
+var GK={'Core':'core','Electives':'elec','Islamic law':'isl','General':'gen'}[c.group]||'core';
+var NT=0; c.parts.forEach(function(x){NT+=x.topics.length});
+var info='<div class="vol g-'+GK+' cover"><strong>'+esc(c.group)+(c.cle===2?' · ★ Required by the Council of Legal Education':c.cle===1?' · † Listed as required by some sources':'')+'</strong>'+
+  '<span class="vm"><span>'+(NT?NT+' topic'+(NT===1?'':'s')+(c.parts.length>1?' in '+c.parts.length+' parts':''):'Topics coming soon')+'</span></span>'+
+  (c.aliases.length?'<span class="vm"><span>Also called: '+c.aliases.map(esc).join(', ')+'</span></span>':'')+
+  '<span class="cbar"><button class="sv" id="save" aria-pressed="false">Save course</button></span></div>'+
+  '<div class="legend mycat">My category (only you see this)</div><div id="mytag" class="tagrow" role="group" aria-label="My category"></div>';
 $('info').innerHTML=info;
 
 function drawTag(){
@@ -69,49 +72,124 @@ function drawTabs(){
   if(c.parts.length<2){ $('tabs').classList.add('hidden'); return; }
   $('tabs').innerHTML=c.parts.map(function(p,i){return '<button role="tab" data-i="'+i+'" aria-selected="'+(i===cur)+'">'+esc(p.label.replace(/ \(.*\)/,''))+'</button>'}).join('');
 }
-var ready={};
+var ready={}, quizReady={};
 function total(){var n=0;c.parts.forEach(function(x){n+=x.topics.length});return n}
 function drawProg(){
-  var d=Prog.doneIn(c.id), t=total(), sv=!!Prog.get().saved[c.id];
-  $('save').textContent=sv?'Saved ✓':'Save course';
-  $('prog').textContent=t?d+' of '+t+' topics done':'';
+  try{ drawState(); }catch(x){}
+  var sv=!!Prog.get().saved[c.id];
+  $('save').textContent=sv?'Saved ✓':'Save course'; $('save').setAttribute('aria-pressed',sv?'true':'false');
 }
+var PSTATE=null;
 function drawTopics(){
-  var p=c.parts[cur], P=Prog.get();
+  var p=c.parts[cur], P=Prog.get(), lockOn=!!(PSTATE&&PSTATE.on&&!PSTATE.active);
   $('topics').innerHTML=p.topics.map(function(t,i){
-    var nid='t:'+c.id+':'+cur+':'+i, ok=ready[nid]&&ready[nid].status==='complete', dn=!!P.done[nid];
-    return '<li class="topic" style="display:flex;align-items:center"><a href="note.html?c='+encodeURIComponent(c.id)+'&p='+cur+'&i='+i+'" style="flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;padding:13px 0 13px 16px;text-decoration:none;color:var(--text)"><span class="n">'+(i+1)+'</span><span class="t">'+esc(t)+(ok?' <span style="color:var(--sage);font-size:13px;font-weight:600">· Note ready</span>':'')+'</span></a><button class="chk" data-id="'+nid+'" aria-pressed="'+dn+'" aria-label="Mark topic '+(i+1)+' as done" style="flex:none;width:48px;height:48px;border:0;background:none;color:'+(dn?'var(--sage)':'var(--muted)')+';cursor:pointer;font-size:22px">'+(dn?'✓':'○')+'</button></li>';
+    var nid='t:'+c.id+':'+cur+':'+i, ok=ready[nid]&&ready[nid].status==='complete', dn=!!P.done[nid], qz=!!quizReady[nid], qr=Prog.quizOf(nid);
+    var ctl=!qz?'':'<a class="tq'+(dn?' dn':'')+'" href="quiz.html?c='+encodeURIComponent(c.id)+'&p='+cur+'&i='+i+'" aria-label="'+(dn?'Learnt. Take the quiz again':'Take the quiz')+' for topic '+(i+1)+'">'+(dn?'✓ Learnt':'Take quiz'+(qr?'<small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">Best '+qr.b+'%</small>':''))+'</a>';
+    var m=/^(.*?)\s*\((.*)\)\s*$/.exec(t), main=m?m[1]:t, sub=m?m[2].charAt(0).toUpperCase()+m[2].slice(1):'';
+    var flag=lockOn&&!LawLink.isFree(nid)?'<span class="tf lk">Pass needed</span>':'';
+    return '<li class="topic"><a class="tl" href="note.html?c='+encodeURIComponent(c.id)+'&p='+cur+'&i='+i+'"><span class="n">'+(i+1)+'</span><span class="t"><b class="tm">'+esc(main)+'</b>'+(sub?'<span class="ts">'+esc(sub)+'</span>':'')+flag+'</span></a>'+ctl+'</li>';
   }).join('');
   drawProg();
 }
 if(!c.parts.length){
-  $('empty').innerHTML='<div class="soonbox"><h3>Topics coming soon</h3><p>We have not found a published list of topics for this course yet. They will be added by specialists.</p></div>';
+  $('empty').innerHTML='';
 }else{
   drawTabs(); drawTopics();
 }
 if(!c.parts.length) drawProg();
 $('save').onclick=function(){Prog.toggle('saved',c.id);drawProg()};
-$('topics').onclick=function(e){var b=e.target.closest('.chk');if(!b)return;Prog.toggle('done',b.dataset.id);drawTopics()};
 $('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;drawTabs();drawTopics();window.scrollTo(0,0)};
+
+var iracReady={};
+LawLink.payState().then(function(s){ PSTATE=s; if(c.parts.length) drawTopics(); }).catch(function(){});
+function drawState(){
+  if(!c.parts.length){ $('cstate').innerHTML=''; return; }
+  var cs=Prog.courseState(c,iracReady,quizReady), h='';
+  var SEAL='<svg viewBox="0 0 28 32" aria-hidden="true"><path d="M2 30V14a12 12 0 0 1 24 0v16z"/><path d="M8.5 19l4 4 7-9"/></svg>';
+  if(cs.n>0) h+='<div class="crow pg" style="cursor:default"><strong>'+(cs.complete?'<span class="seal">'+SEAL+'Course complete</span>':'Your progress')+'</strong><span class="m">'+cs.d+' of '+cs.n+(cs.n===1?' topic learnt':' topics learnt')+(cs.parts.some(function(x){return x.has})?' · '+cs.parts.filter(function(x){return x.has&&x.passed}).length+' of '+cs.parts.filter(function(x){return x.has}).length+' IRAC tests passed':'')+'</span><span class="bar"><i style="width:'+cs.pct+'%"></i></span></div>';
+  cs.parts.forEach(function(x){
+    if(!x.has) return;
+    var href='irac.html?c='+encodeURIComponent(c.id)+'&p='+x.pi, lab=x.label.replace(/ \(.*\)/,'');
+    h+='<a class="crow irac'+(x.passed||x.unlocked?'':' lk')+'" href="'+href+'"><strong>IRAC test: '+esc(lab)+(x.passed?' ✓':'')+'</strong><span class="m">'+(x.passed?'Passed · best '+x.best+'% · tap to try again':x.unlocked?'Unlocked · 5 scenarios, 20 minutes, pass mark 80%'+(x.best!==null?' · best '+x.best+'%':''):'Locked · learn all '+x.n+' topics first ('+x.d+' done)')+'</span></a>';
+  });
+  $('cstate').innerHTML=h;
+}
+LawLink.iracReady(c.id).then(function(m){ iracReady=m||{}; drawState(); }).catch(function(){});
+
+// ---- Admin: write all missing notes in one go, review list, IRAC, statistics ----
+var TKEYS=['intro','principles','statutory','cases','application','exceptions','criticism','summary','exam'], CKEYS=['overview','scope','topicmap','authorities','studyguide','exam'];
+var bulkRun=false, bulkStop=false;
+function drawBulk(msg,err){
+  var h='<h3>Admin: write, review and test</h3><div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">'+
+    (bulkRun?'<button class="btn" id="bstop">Stop after this section</button>':'<button class="btn" data-b="part">Write all missing notes in this part</button><button class="btn alt" data-b="all">Write all missing notes in the course</button>')+'</div>'+
+    '<div class="msg'+(err?' err':'')+'" id="bmsg" role="status">'+esc(msg||'Writes every section that is missing, topic by topic. Keep this page open. If it stops, tap again and it carries on from where it stopped; finished sections are not written twice.')+'</div>'+
+    '<div class="btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a class="btn alt" style="text-decoration:none" href="review.html?c='+encodeURIComponent(c.id)+'">Review list</a><a class="btn alt" style="text-decoration:none" href="stats.html?c='+encodeURIComponent(c.id)+'">Quiz statistics</a></div>'+
+    (c.group!=='General'?'<div class="legend" style="margin:12px 0 4px">IRAC tests (one per part)</div><div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">'+c.parts.map(function(pt,pi){return '<a class="btn alt" style="text-decoration:none" href="irac.html?c='+encodeURIComponent(c.id)+'&p='+pi+'&admin=1">'+esc(pt.label.replace(/ \(.*\)/,''))+'</a>'}).join('')+'</div>':'');
+  $('bulk').classList.remove('hidden'); $('bulk').innerHTML=h;
+}
+async function bulkWrite(scopeAll){
+  bulkRun=true; bulkStop=false; drawBulk('Starting…');
+  var all=[]; c.parts.forEach(function(x){all=all.concat(x.topics)});
+  var jobs=[];
+  if(scopeAll) jobs.push({id:'c:'+c.id,kind:'course',keys:CKEYS,title:c.name+': course note',ctx:{course:c.name,topics:all}});
+  c.parts.forEach(function(pt,pi){ if(!scopeAll&&pi!==cur) return; pt.topics.forEach(function(t,i){ jobs.push({id:'t:'+c.id+':'+pi+':'+i,kind:'topic',keys:TKEYS,title:t,ctx:{course:c.name,part:pt.label,topic:t,siblings:pt.topics.filter(function(z){return z!==t})}}); }); });
+  var wrote=0, fails=0, row=0, revd=0, chg=0, j, k, stopped='';
+  outer:
+  for(j=0;j<jobs.length;j++){
+    var jb=jobs[j]; if(ready[jb.id]&&ready[jb.id].status==='complete') continue;
+    var have=[]; try{ var d=await LawLink.libGet(jb.id,true); have=d.sections.map(function(x){return x.key}); }catch(x){ if(/log in|expired/i.test(x.message)){ stopped='Your session expired. Sign in again and tap the button to continue.'; break; } }
+    var miss=jb.keys.filter(function(x){return have.indexOf(x)<0});
+    for(k=0;k<miss.length;k++){
+      if(bulkStop){ stopped='Stopped. Tap the button to carry on.'; break outer; }
+      drawBulk('Note '+(j+1)+' of '+jobs.length+' ('+jb.title.slice(0,50)+'), section '+(k+1)+' of '+miss.length+'. Wrote '+wrote+' sections so far.');
+      try{ var gr=await LawLink.genSection({noteId:jb.id,kind:jb.kind,key:miss[k],title:jb.title,context:jb.ctx}); wrote++; row=0; if(gr&&gr.reviewed){ revd++; chg+=gr.changes||0; } }
+      catch(x){ fails++; row++; if(/log in|expired/i.test(x.message)){ stopped='Your session expired. Sign in again and tap the button to continue.'; break outer; } if(row>=3){ stopped='Stopped after 3 failures in a row: '+x.message+' Wait a few minutes (Gemini may be busy or out of allowance), then tap the button to carry on.'; break outer; } k--; await new Promise(function(ok){setTimeout(ok,4000)}); if(row>=3) break outer; }
+    }
+  }
+  bulkRun=false;
+  try{ ready=await LawLink.libList(['c:'+c.id,'t:'+c.id+':']); if(c.parts.length) drawTopics(); }catch(x){}
+  drawBulk(stopped||('Finished. Wrote '+wrote+' section'+(wrote===1?'':'s')+(revd?', each reviewed by a second pass ('+chg+' doubtful detail'+(chg===1?'':'s')+' corrected or removed)':'')+'.'+(fails?' '+fails+' retries were needed.':'')+' Next: scan for authorities and write the quizzes.'),!!stopped&&/Stopped after|expired/.test(stopped));
+}
+$('bulk').addEventListener('click',function(e){
+  if(e.target.closest('#bstop')){ bulkStop=true; e.target.disabled=true; return; }
+  var b=e.target.closest('[data-b]'); if(!b||bulkRun) return; bulkWrite(b.dataset.b==='all');
+});
 
 var scanning=false;
 function drawScan(msg,err){
   var n=Object.keys(ready).length;
   $('scan').classList.remove('hidden');
-  $('scan').innerHTML='<h3>Admin</h3><div>'+n+' written note'+(n===1?'':'s')+' in this course. Finds statutes, rules and treaties in them and makes them tappable. The wording does not change.</div>'+
-    '<div class="btns"><button class="btn alt" id="scanbtn"'+(scanning||!n?' disabled':'')+'>'+(scanning?'Scanning…':'Scan whole course for authorities')+'</button></div><div class="msg'+(err?' err':'')+'" id="scanmsg" role="status">'+esc(msg||'')+'</div>';
+  $('scan').innerHTML='<h3>Admin</h3><div>'+n+' written note'+(n===1?'':'s')+' in this course. Finds statutes, rules and treaties in them and makes them tappable. The wording does not change, and Gemini is not used.</div>'+
+    '<div class="btns"><button class="btn alt" id="scanbtn"'+(scanning||!n?' disabled':'')+'>'+(scanning?'Working…':'Scan whole course for authorities')+'</button> <button class="btn alt" id="qbulk"'+(scanning||!n?' disabled':'')+'>Write quizzes for every written topic</button></div><div class="msg'+(err?' err':'')+'" id="scanmsg" role="status">'+esc(msg||'')+'</div>';
 }
 $('scan').addEventListener('click',async function(e){
+  if(e.target.closest('#qbulk')&&!scanning){
+    var tids=Object.keys(ready).filter(function(k){return k.indexOf('t:')===0&&ready[k].status==='complete'}), made=0, skipped=0, bad=0, z;
+    scanning=true; drawScan('Starting…');
+    for(z=0;z<tids.length;z++){
+      $('scanmsg').textContent='Quiz '+(z+1)+' of '+tids.length+'…';
+      var seg=tids[z].split(':'), tp=c.parts[+seg[2]]&&c.parts[+seg[2]].topics[+seg[3]];
+      if(!tp){ continue; }
+      try{
+        var ex=await LawLink.quizAdminGet(tids[z]);
+        if(ex.questions.length){ skipped++; continue; }
+        await LawLink.quizMake(tids[z],{course:c.name,topic:tp}); made++;
+      }catch(x){ bad++; if(/log in|expired/i.test(x.message)) break; }
+    }
+    scanning=false;
+    drawScan('Done. Wrote '+made+' draft quiz'+(made===1?'':'zes')+(skipped?', skipped '+skipped+' that already have one':'')+(bad?', '+bad+' failed (Gemini may be busy; tap again to retry)':'')+'. Open each topic to read and approve its quiz; students cannot see drafts.',bad>0);
+    return;
+  }
   if(!e.target.closest('#scanbtn')||scanning) return;
   var ids=Object.keys(ready), linked=0, failed=0, i;
   scanning=true; drawScan('Starting…');
   for(i=0;i<ids.length;i++){
     $('scanmsg').textContent='Scanning note '+(i+1)+' of '+ids.length+'…';
-    try{ var r=await LawLink.scanNote(ids[i]); linked+=r.linked||0; }
+    try{ var r=await LawLink.scanNote(ids[i],false); linked+=r.linked||0; }
     catch(x){ failed++; if(/log in|expired/i.test(x.message)){ break; } }
   }
   scanning=false;
-  drawScan('Done. Linked '+linked+' authorit'+(linked===1?'y':'ies')+' across '+ids.length+' note'+(ids.length===1?'':'s')+'.'+(failed?' '+failed+' note'+(failed===1?'':'s')+' could not be scanned (Gemini may be busy). Tap the button again to retry; finished notes are not changed twice.':''),failed>0);
+  drawScan('Done. Linked '+linked+' authorit'+(linked===1?'y':'ies')+' across '+ids.length+' note'+(ids.length===1?'':'s')+'.'+(failed?' '+failed+' note'+(failed===1?'':'s')+' could not be scanned. Tap the button again to retry; finished notes are not changed twice.':''),failed>0);
 });
 var courseAdmin=false;
 function editForm(){
@@ -152,9 +230,10 @@ function drawEdit(){
   $('edit').classList.remove('hidden');
   if(!$('emsg')) $('edit').innerHTML='<h3>Admin: edit course</h3><div class="btns"><button class="btn alt" data-e="open">Edit course, topics or hide</button></div><div id="eform" class="hidden"></div><div class="msg" id="emsg" role="status"></div>';
 }
-LawLink.me().then(function(u){ courseAdmin=u.role==='admin'; if(courseAdmin){ drawScan(); drawEdit(); } }).catch(function(){});
+LawLink.me().then(function(u){ courseAdmin=u.role==='admin'; if(courseAdmin){ drawScan(); drawEdit(); drawBulk(); } }).catch(function(){});
+LawLink.quizReady(c.id).then(function(m){ quizReady=m||{}; if(c.parts.length){ drawTopics(); drawState(); } }).catch(function(){});
 LawLink.libList(['c:'+c.id,'t:'+c.id+':']).then(function(m){
-  ready=m; var cn=m['c:'+c.id]; if(cn&&cn.status==='complete') $('cnotem').innerHTML='<span style="color:var(--sage);font-weight:600">Note ready</span> · Overview, scope and study guide';
+  ready=m; var cn=m['c:'+c.id]; 
   if(c.parts.length) drawTopics();
   if(courseAdmin&&!scanning) drawScan();
 }).catch(function(){});

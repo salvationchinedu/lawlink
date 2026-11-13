@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – IRAC test</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px}
+.qrow{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.qrow:last-of-type{border-bottom:0}
+.qrow b{font-weight:600}
+.qnote{background:var(--tint);border-left:4px solid var(--gold);border-radius:8px;padding:10px 12px;font-size:14px;margin-top:12px}
+.qbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+.qtimer{font:600 16px "Source Serif 4","Times New Roman",Times,"Liberation Serif",Tinos,serif;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-variant-numeric:tabular-nums}
+.qtimer.low{color:var(--danger);border-color:var(--danger)}
+.qcount{font-weight:600;font-size:15px;color:var(--muted)}
+.facts{background:var(--tint);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:15px;line-height:1.55}
+.facts b{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.step{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--navy);color:var(--on-navy);margin-top:14px}
+.qtext{font:700 18px/1.4 Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:8px 0 12px}
+.opt{display:flex;flex-wrap:nowrap;align-items:flex-start;gap:12px;width:100%;text-align:left;background:var(--surface);color:var(--text);border:1.5px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:10px;font:inherit;cursor:pointer;min-height:52px}
+.opt>span:last-child{flex:1;min-width:0}
+.opt .l{flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--navy);background:var(--tint)}
+.opt[aria-pressed="true"] .l{background:var(--navy);border-color:var(--navy);color:var(--on-navy)}
+.opt.right{border-color:var(--sage);background:var(--tint)}
+.opt.wrong{border-color:var(--danger)}
+.qfoot{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:6}
+.qfoot>div{max-width:480px;margin:0 auto;display:flex;gap:8px}
+.qfoot .btn{flex:1}
+.qgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.qgrid .sc{grid-column:1/-1;font-size:12px;color:var(--muted);margin-top:6px}
+.qgrid button{height:42px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);font:600 13px "Source Serif 4","Times New Roman",Times,"Liberation Serif",Tinos,serif;cursor:pointer}
+.qgrid button.ans{background:var(--tint);border-color:var(--navy)}
+.qgrid button.cur{outline:2px solid var(--gold)}
+.qscore{font:700 56px Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;text-align:center;margin-top:8px}
+.qscore.ok{color:var(--sage)}.qscore.no{color:var(--danger)}
+.why{font-size:14px;color:var(--muted);margin-top:6px}
+.ab textarea.in{min-height:0}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--tint);margin-left:6px}
+.badge.ok{color:var(--sage)}.badge.warn{color:var(--danger)}
+</style>
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" id="back" href="courses.html" aria-label="Back to the course" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="hd">IRAC test</h1>
+  </header>
+  <main id="main" style="padding-bottom:96px"></main>
+  <div class="qfoot hidden" id="foot"><div id="footin"></div></div>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var q=new URLSearchParams(location.search), cid=q.get('c'), p=+q.get('p');
+var c=COURSES.filter(function(x){return x.id===cid})[0], part=c&&c.parts[p];
+if(!part){ $('main').innerHTML='<div class="soonbox"><h3>We could not find that test</h3></div>'; return; }
+var STEPN=['Issue','Rule','Application','Conclusion'], LT='ABCD', BACK='course.html?id='+encodeURIComponent(c.id), plabel=part.label.replace(/ \(.*\)/,'');
+$('back').href=BACK; $('hd').textContent='IRAC test'; document.title='Lex-Tabulā – IRAC: '+c.name+' '+plabel;
+var isAdmin=false, PS=null, QR=null;
+
+// ---------------- Admin: write, read answers, edit, approve ----------------
+var slots=[];
+function stBadge(x){
+  var h='<span class="badge '+(x.status==='approved'?'ok':'')+'">'+(x.status==='approved'?'Approved':x.status==='draft'?'Draft':'Not written')+'</span>';
+  if(x.check&&x.check.agree===false) h+='<span class="badge warn">Checker disagreed on '+x.check.diffs.map(function(i){return STEPN[i]}).join(', ')+'. Read it carefully</span>';
+  else if(x.check&&x.check.agree) h+='<span class="badge ok">Independent check agreed</span>';
+  else if(x.data) h+='<span class="badge">Not checked</span>';
+  return h;
+}
+function view(x){
+  var d=x.data; if(!d) return '';
+  return '<div class="facts"><b>Facts</b>'+esc(d.facts)+'</div>'+d.steps.map(function(st,si){
+    return '<div><span class="step">'+STEPN[si]+'</span><div class="qtext" style="font-size:16px">'+esc(st.q)+'</div>'+st.o.map(function(t,k){return '<div class="opt'+(k===st.a?' right':'')+'" style="cursor:default;margin-bottom:6px;min-height:0"><span class="l">'+LT[k]+'</span><span>'+esc(t)+(k===st.a?' <b>✓ correct</b>':'')+'</span></div>'}).join('')+(st.e?'<div class="why">'+esc(st.e)+'</div>':'')+'</div>';
+  }).join('');
+}
+function form(x){
+  var d=x.data;
+  var h='<label class="f">Facts</label><textarea class="in" data-f="facts" rows="6">'+esc(d.facts)+'</textarea>';
+  d.steps.forEach(function(st,si){
+    h+='<div class="kv" style="margin-top:12px"><label class="f">'+STEPN[si]+' question</label><textarea class="in" data-s="'+si+'" data-f="q" rows="2">'+esc(st.q)+'</textarea>'+
+      st.o.map(function(t,k){return '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="radio" name="r'+x.slot+'_'+si+'" value="'+k+'" aria-label="Option '+LT[k]+' is correct"'+(st.a===k?' checked':'')+' style="width:22px;height:22px;flex:none"><input class="in" data-s="'+si+'" data-f="o'+k+'" value="'+esc(t)+'" maxlength="250"></div>'}).join('')+
+      '<label class="f">Explanation</label><textarea class="in" data-s="'+si+'" data-f="e" rows="2">'+esc(st.e||'')+'</textarea></div>';
+  });
+  return h;
+}
+function drawAdmin(msg,err){
+  var appr=slots.filter(function(x){return x.status==='approved'}).length;
+  var h='<div class="adm"><h3>Admin: IRAC test for '+esc(c.name)+', '+esc(plabel)+'</h3><div>'+appr+' of 5 scenarios approved. Students can take the test only when all 5 are approved. Each scenario is made from the written notes of two or three topics in this part, and a second Gemini key checks it independently. The correct answers are shown below because you are logged in as admin.</div>'+
+    '<div style="margin-top:8px"><a class="btn alt" href="'+BACK+'" style="text-decoration:none">Back to the course</a></div><div class="msg'+(err?' err':'')+'" id="amsg" role="status">'+esc(msg||'')+'</div></div>';
+  slots.forEach(function(x){
+    h+='<div class="qcard" data-slot="'+x.slot+'"><strong>Scenario '+(x.slot+1)+'</strong>'+stBadge(x)+(x.data&&x.data.topics&&x.data.topics.length?'<div class="why">From: '+x.data.topics.map(esc).join('; ')+'</div>':'')+
+      '<div class="btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" data-a="make">'+(x.data?'Regenerate':'Generate scenario '+(x.slot+1))+'</button>'+
+      (x.data?'<button class="btn alt" data-a="edit">'+(x.editing?'Close editor':'Edit')+'</button>'+(x.status==='approved'?'<button class="btn alt" data-a="unpub">Hide from students</button>':(x.editing?'':'<button class="btn alt" data-a="approve">Approve</button>'))+'<button class="btn ghost" data-a="del">Delete</button>':'')+'</div>'+
+      (x.data?(x.editing?'<div class="ab">'+form(x)+'<div class="btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn alt" data-a="savedraft">Save draft</button><button class="btn" data-a="saveappr">Save and approve</button></div></div>':view(x)):'')+'</div>';
+  });
+  $('main').innerHTML=h;
+}
+function read(card){
+  var d={facts:card.querySelector('[data-f=facts]').value,steps:[]};
+  for(var si=0;si<4;si++){
+    var chk=card.querySelector('input[name="r'+card.dataset.slot+'_'+si+'"]:checked');
+    d.steps.push({q:card.querySelector('[data-s="'+si+'"][data-f=q]').value,o:[0,1,2,3].map(function(k){return card.querySelector('[data-s="'+si+'"][data-f=o'+k+']').value}),a:chk?+chk.value:-1,e:card.querySelector('[data-s="'+si+'"][data-f=e]').value});
+  }
+  return d;
+}
+async function adminInit(){
+  $('hd').textContent='IRAC admin';
+  try{ slots=await LawLink.iracAdminList(c.id,p); }catch(e){ $('main').innerHTML='<div class="soonbox"><p>'+esc(e.message)+'</p></div>'; return; }
+  drawAdmin();
+  $('main').addEventListener('click',async function(e){
+    var b=e.target.closest('[data-a]'); if(!b) return; var card=b.closest('[data-slot]'), sl=+card.dataset.slot, x=slots[sl], a=b.dataset.a; b.disabled=true;
+    var ctx={course:c.name,part:plabel,topics:part.topics};
+    try{
+      if(a==='make'){
+        if(x.data&&!confirm('Replace this scenario with a new one? It goes back to draft.')){ b.disabled=false; return; }
+        drawAdmin('Writing scenario '+(sl+1)+' and checking it with a second key… this can take a minute or two.');
+        var r=await LawLink.iracMake(c.id,p,sl,ctx); r.editing=false; slots[sl]=r; drawAdmin('Scenario '+(sl+1)+' written. Read it, fix anything wrong, then approve.'); return;
+      }
+      if(a==='edit'){ x.editing=!x.editing; drawAdmin(); return; }
+      if(a==='del'){ if(!confirm('Delete this scenario?')){ b.disabled=false; return; } slots[sl]=await LawLink.iracSave(c.id,p,sl,null,'delete'); drawAdmin('Deleted.'); return; }
+      var data=(a==='savedraft'||a==='saveappr')?read(card):x.data, st=(a==='approve'||a==='saveappr')?'approved':(a==='unpub'||a==='savedraft'?'draft':x.status);
+      var r2=await LawLink.iracSave(c.id,p,sl,data,st); r2.editing=false; slots[sl]=r2; drawAdmin(st==='approved'?'Approved.':'Saved as draft.');
+    }catch(err){ b.disabled=false; drawAdmin(err.message,true); }
+  });
+}
+
+// ---------------- Student: the test ----------------
+var PV=false, TOTAL=20, L={n:20,mins:20,pass:80}, S=[], items=[], ans={}, cur=0, endAt=0, tick=null, submitting=false, ticket='';
+var AK='lawlink-attempt:i:'+c.id+':'+p;
+function build(){ items=[]; S.forEach(function(sc,k){ sc.steps.forEach(function(st){ items.push({k:k,sc:sc,st:st}); }); }); }
+function persist(){ if(PV) return; try{ localStorage.setItem(AK,JSON.stringify({ticket:ticket,endAt:endAt,S:S,ans:ans,cur:cur,L:L})); }catch(e){} }
+function loadAttempt(){ try{ var v=JSON.parse(localStorage.getItem(AK)); if(v&&v.S&&v.S.length&&v.ticket&&v.endAt&&Date.now()-v.endAt<2*3600000) return v; }catch(e){} return null; }
+function clearAttempt(){ try{ localStorage.removeItem(AK); }catch(e){} }
+function restore(v){ S=v.S; build(); ans=v.ans||{}; cur=Math.min(v.cur||0,items.length-1); endAt=v.endAt; ticket=v.ticket; L=v.L||L; submitting=false; }
+function lockInfo(){
+  var cs=Prog.courseState(c,{},QR||{}), pp=cs.parts[p]; return pp;
+}
+function mmss(ms){ var s=Math.max(0,Math.ceil(ms/1000)), m=Math.floor(s/60); s=s%60; return (m<10?'0':'')+m+':'+(s<10?'0':'')+s; }
+function intro(msg,fresh){
+  var sv=fresh?null:loadAttempt();
+  if(sv){
+    $('foot').classList.add('hidden');
+    if(sv.endAt-Date.now()>0){
+      $('main').innerHTML='<h2 style="font-size:22px">'+esc(c.name)+'</h2><div class="qcard"><h3>You have an unfinished IRAC test</h3><p style="margin-top:6px">You have answered '+Object.keys(sv.ans||{}).length+' of '+(sv.S.length*4)+' questions and there are <b>'+mmss(sv.endAt-Date.now())+'</b> left.</p><div class="btns" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="resume">Carry on</button><button class="btn alt" id="discard">Start over</button></div></div>';
+      $('resume').onclick=function(){ restore(sv); clearInterval(tick); tick=setInterval(clock,500); draw(); };
+      $('discard').onclick=function(){ clearAttempt(); intro('',true); };
+      return;
+    }
+    restore(sv);
+    $('main').innerHTML='<div class="soonbox"><h3>Your time ended while you were away</h3><p>Submitting the answers you had given…</p></div>';
+    submit(true); return;
+  }
+  $('foot').classList.add('hidden');
+  var pp=lockInfo(), r=Prog.iracOf(c.id,p), free=(p===0)&&PS&&PS.on&&!PS.active, pv=PS&&PS.on&&!PS.active, locked=!pp.unlocked&&!isAdmin&&!free&&!pv;
+  var h='<h2 style="font-size:22px">'+esc(c.name)+'</h2><div class="why" style="margin-top:2px">'+esc(plabel)+' · IRAC test</div><div class="qcard">'+
+    '<div class="qrow"><span>Scenarios</span><b>5, each with 4 steps</b></div><div class="qrow"><span>Questions</span><b>20</b></div>'+
+    '<div class="qrow"><span>Time allowed</span><b>20 minutes (4 per scenario)</b></div><div class="qrow"><span>Pass mark</span><b>80% (16 of 20)</b></div>'+
+    (r?'<div class="qrow"><span>Best score</span><b>'+r.b+'%'+(r.p?' · Passed ✓':'')+'</b></div><div class="qrow"><span>Attempts</span><b>'+r.n+'</b></div>':'')+
+    '<div class="qnote">Each scenario has four questions: the <b>Issue</b>, the <b>Rule</b>, how the rule is <b>Applied</b> to the facts, and the <b>Conclusion</b>. The wrong options are close to right, so read carefully. Reach 80% to pass and see every correct answer with an explanation. Below 80% you only see your score. The scenarios and options change order each time.</div>';
+  if(locked) h+='<div class="qnote" style="border-left-color:var(--danger)">This test opens when every topic in '+esc(plabel)+' is learnt. You have done '+pp.d+' of '+pp.n+'. Pass each topic quiz to unlock it.</div><div class="btns" style="margin-top:12px"><a class="btn" href="'+BACK+'" style="text-decoration:none">Back to the course</a></div>';
+  else h+='<div class="btns" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="start">Take the test</button><a class="btn alt" href="'+BACK+'" style="text-decoration:none">Back to the course</a></div>';
+  h+='<div class="msg err" id="qmsg" role="status">'+esc(msg||'')+'</div></div>';
+  $('main').innerHTML=h;
+  if($('start')) $('start').onclick=start;
+}
+async function start(){
+  var b=$('start'); b.disabled=true; $('qmsg').textContent='';
+  try{ var d=await LawLink.iracGet(c.id,p); S=d.scenarios; ticket=d.ticket; L.n=d.n; L.mins=d.mins||20; L.pass=d.pass||80; PV=!!d.preview; TOTAL=d.total||20; }
+  catch(e){ if(/needs the (LawLink|Lex-Tabulā) pass/.test(e.message)){ $('foot').classList.add('hidden'); $('main').innerHTML=LawLink.lockHtml(''); return; } b.disabled=false; $('qmsg').textContent=(e instanceof TypeError)?'Could not load the test. Check your data and try again.':e.message; return; }
+  build();
+  ans={}; cur=0; submitting=false; endAt=Date.now()+L.mins*60000; persist();
+  clearInterval(tick); if(!PV) tick=setInterval(clock,500); draw();
+}
+function clock(){ var left=endAt-Date.now(), t=$('timer'); if(t){ t.textContent=mmss(left); t.classList.toggle('low',left<=60000); } if(left<=0&&!submitting){ clearInterval(tick); submit(true); } }
+function key(it){ return it.sc.si+':'+it.st.st; }
+function answered(){ return Object.keys(ans).length; }
+function draw(){
+  persist();
+  var it=items[cur];
+  $('main').innerHTML='<div class="qbar"><span class="qcount">Scenario '+(it.k+1)+' of '+S.length+' · Question '+(cur+1)+' of '+items.length+'</span><span class="qtimer" id="timer" role="timer" aria-label="Time left">'+(PV?'Preview':mmss(endAt-Date.now()))+'</span></div><div class="qseg" aria-hidden="true">'+items.map(function(y,i){return '<i class="'+(i===cur?'c ':'')+(ans[key(y)]!==undefined?'a ':'')+(i>0&&y.k!==items[i-1].k?'g':'')+'"></i>'}).join('')+'</div>'+(PV?'<div class="qnote" style="border-left-color:var(--danger);margin:0 0 12px"><b>Preview.</b> You are seeing '+items.length+' of '+TOTAL+' questions. Get the Lex-Tabulā pass to take the full test and submit your answers.</div>':'')+
+    '<div class="facts"><b>Facts</b>'+esc(it.sc.facts)+'</div><span class="step">'+STEPN[it.st.st]+'</span><div class="qtext">'+esc(it.st.q)+'</div>'+
+    it.st.o.map(function(o,k){return '<button class="opt" data-o="'+o.oi+'" aria-pressed="'+(ans[key(it)]===o.oi)+'"><span class="l">'+LT[k]+'</span><span>'+esc(o.t)+'</span></button>'}).join('')+
+    '<div class="legend" style="margin:14px 0 4px">Jump to a question</div><div class="qgrid">'+items.map(function(y,i){ var head=(i%4===0)?'<div class="sc">Scenario '+(y.k+1)+'</div>':''; return head+'<button data-j="'+i+'" class="'+(ans[key(y)]!==undefined?'ans ':'')+(i===cur?'cur':'')+'" aria-label="Scenario '+(y.k+1)+' '+STEPN[y.st.st]+(ans[key(y)]!==undefined?', answered':'')+'">'+STEPN[y.st.st].slice(0,1)+'</button>'; }).join('')+'</div>';
+  $('foot').classList.remove('hidden');
+  $('footin').innerHTML='<button class="btn alt" id="prev"'+(cur?'':' disabled')+' aria-label="Previous question">‹</button><button class="btn alt" id="next"'+(cur<items.length-1?'':' disabled')+' aria-label="Next question">›</button>'+(PV?'<a class="btn" href="subscribe.html" style="flex:3;text-decoration:none;text-align:center">Pay to submit</a>':'<button class="btn" id="sub" style="flex:3">Submit ('+answered()+'/'+items.length+')</button>');
+  $('prev').onclick=function(){cur--;draw();window.scrollTo(0,0)}; $('next').onclick=function(){cur++;draw();window.scrollTo(0,0)};
+  if($('sub')) $('sub').onclick=function(){ var n=items.length-answered(); if(n&&!confirm(n+' question'+(n===1?' is':'s are')+' not answered. Submit anyway?')) return; submit(false); };
+}
+async function submit(timeUp){
+  if(submitting) return; submitting=true; clearInterval(tick); $('foot').classList.add('hidden');
+  $('main').innerHTML='<div class="soonbox"><h3>'+(timeUp?'Time is up. ':'')+'Marking your answers…</h3></div>';
+  var r=null;
+  for(var k=0;k<3&&!r;k++){ try{ r=await LawLink.iracSubmit(c.id,p,ans,ticket); }catch(e){ if(k===2){ submitting=false; $('main').innerHTML='<div class="soonbox"><h3>Your answers were not sent</h3><p>'+esc((e instanceof TypeError)?'Check your data connection.':e.message)+'</p><button class="btn" id="retry" style="margin-top:12px">Try again</button></div>'; $('retry').onclick=function(){submit(false)}; return; } await new Promise(function(ok){setTimeout(ok,800)}); } }
+  clearAttempt();
+  var rec=Prog.iracRec(c.id,p,r.pct,r.pass);
+  result(r,rec,timeUp||r.late);
+}
+function result(r,rec,timeUp){
+  var h='<div class="qcard"><div class="qscore '+(r.pass?'ok':'no')+'">'+r.pct+'%</div><p style="text-align:center;margin-top:4px"><strong>'+r.score+' of '+r.total+' correct</strong>'+(timeUp?' · time ran out':'')+'</p>'+
+    '<p style="text-align:center;margin-top:8px">'+(r.pass?'<span class="pill tip">✓ Passed</span>':'<span class="pill">Pass mark 80% ('+r.needed+' correct)</span>')+'</p>';
+  h+='<div style="margin-top:10px">'+S.slice().sort(function(a,b){return a.si-b.si}).map(function(sc){ return '<div class="qrow"><span>Scenario '+(sc.si+1)+'</span><b>'+(r.per[sc.si]||0)+' of 4</b></div>'; }).join('')+'</div>';
+  if(!r.pass) h+='<div class="qnote">You did not reach 80%, so the answers are not shown. Revise the topics of this part, then take the test again. Your best score so far is '+rec.b+'%.</div>';
+  h+='<div class="btns" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">'+(r.pass?'':'<button class="btn" id="again">Try again</button>')+'<a class="btn '+(r.pass?'':'alt')+'" href="'+BACK+'" style="text-decoration:none">Back to the course</a></div></div>';
+  if(r.pass){
+    h+='<div class="gh">Corrections</div>'+r.review.map(function(x){
+      return '<div class="qcard"><strong>Scenario '+(x.si+1)+'</strong><div class="facts"><b>Facts</b>'+esc(x.facts)+'</div>'+x.steps.map(function(st){
+        return '<div><span class="step">'+st.name+'</span><div class="qtext" style="font-size:16px">'+esc(st.q)+'</div>'+st.o.map(function(t,k){var cls=k===st.a?'right':(k===st.picked?'wrong':''); return '<div class="opt '+cls+'" style="cursor:default;margin-bottom:6px;min-height:0"><span class="l">'+LT[k]+'</span><span>'+esc(t)+(k===st.a?' <b>✓ correct</b>':'')+(k===st.picked&&k!==st.a?' <b>(your answer)</b>':'')+'</span></div>'}).join('')+(st.picked<0?'<div class="why">You did not answer this one.</div>':'')+(st.e?'<div class="why">'+esc(st.e)+'</div>':'')+'</div>';
+      }).join('')+'<button class="btn ghost" data-rep="'+(x.si+1)+'" style="margin-top:8px;padding:8px 14px;font-size:13px">Report scenario '+(x.si+1)+'</button></div>';
+    }).join('');
+  }
+  $('main').innerHTML=h; window.scrollTo(0,0);
+  var a=$('again'); if(a) a.onclick=function(){ intro('',true); };
+}
+document.addEventListener('click',async function(e){
+  var b=e.target.closest('[data-rep]'); if(!b) return;
+  var m=prompt('What is wrong with scenario '+b.dataset.rep+'? Describe it briefly.'); if(!m||!m.trim()) return;
+  try{ await LawLink.libReport('i:'+c.id+':'+p,'IRAC problem (scenario '+b.dataset.rep+'): '+m.trim()); alert('Thank you. We will review it.'); }catch(x){ alert(x.message); }
+});
+$('main').addEventListener('click',function(e){
+  var o=e.target.closest('.opt'), j=e.target.closest('[data-j]');
+  if(o&&items.length&&!submitting&&o.dataset.o!==undefined){ ans[key(items[cur])]=+o.dataset.o; draw(); }
+  else if(j){ cur=+j.dataset.j; draw(); window.scrollTo(0,0); }
+});
+document.addEventListener('visibilitychange',function(){ if(!document.hidden&&tick&&!submitting) clock(); });
+window.addEventListener('beforeunload',function(e){ if(items.length&&tick&&!submitting){ e.preventDefault(); e.returnValue=''; } });
+
+LawLink.payState().then(function(s){ PS=s; }).catch(function(){}).then(function(){ return LawLink.quizReady(c.id).then(function(m){ QR=m; }).catch(function(){}); }).then(function(){ return LawLink.me(); }).then(function(u){ isAdmin=u.role==='admin'; if(isAdmin&&q.get('admin')==='1') adminInit(); else intro(); }).catch(function(){ intro(); });
+})();
+</script>
+</body>
+</html>

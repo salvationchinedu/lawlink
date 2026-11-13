@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LawLink – Statute</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Lex-Tabulā – Statute</title>
 <link rel="stylesheet" href="style.css">
 <script src="ui.js"></script>
+<style>details.toc{margin-bottom:8px}details.toc>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 16px;font-weight:600;line-height:1.3}details.toc>summary::-webkit-details-marker{display:none}details.toc>summary small{flex:none;color:var(--muted);font-weight:400;font-size:13px}details.toc>summary::after{content:'+';flex:none;font-size:20px;color:var(--muted);margin-left:4px}details.toc[open]>summary::after{content:'−'}.tocin{padding:8px 0 4px 8px}.tocpart{font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 6px}</style>
 </head>
 <body>
 <div class="app">
@@ -17,6 +17,7 @@
   <main>
     <div id="meta"></div>
     <h2 id="ttl" style="font-size:24px;margin:10px 0 2px"></h2>
+    <div class="btns" style="margin:8px 0"><button class="btn alt" id="bm" type="button">☆ Save</button></div>
     <div id="admin" class="hidden"></div>
     <div id="body"></div>
     <div id="report" class="hidden" style="margin-top:28px">
@@ -39,7 +40,7 @@
 var $=function(i){return document.getElementById(i)};
 if(!getToken()){ location.replace('login.html'); return; }
 var q=new URLSearchParams(location.search), id=q.get('id')||'', want=q.get('s')||'', isAdmin=false, au=null, busy=false;
-var TYPES={const:'Constitution',act:'Federal Act',state:'State law',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International'};
+var TYPES={const:'Constitution',act:'Federal Act',state:'State law',rule:'Court rules',sub:'Agency rules',eng:'English law',intl:'International',max:'Maxim of Equity'};
 var wantP=parseProv(want);
 
 function sec(h,t){ return t&&String(t).trim()&&t!=='Not confirmed'?'<div class="kv"><h2>'+esc(h)+'</h2><div class="rich">'+rich(t)+'</div></div>':''; }
@@ -47,13 +48,22 @@ function noteLink(n){
   var m=String(n.noteId).split(':'), c=m[1];
   return '<a class="auth" href="note.html?c='+encodeURIComponent(c)+(m[0]==='t'?'&p='+m[2]+'&i='+m[3]:'')+'">'+esc(n.label)+'</a>'+(n.prov?' <span class="cit">'+esc(n.prov)+'</span>':'');
 }
+function curBox(c){
+  if(!c||c.state==='In force') return c&&(c.asAt||c.note)?'<p class="legend" style="margin:6px 0 0">'+(c.note?esc(c.note)+(c.asAt?' ':''):'')+(c.asAt?'Checked as current on '+esc(c.asAt)+'.':'')+'</p>':'';
+  var w={Amended:'This law has been amended. Check the latest amended text before relying on it.',Repealed:'This law has been repealed. It may no longer be good law.',Superseded:'This law has been replaced by a newer law.'}[c.state]||'';
+  var body='<p style="margin:6px 0 0;font-size:14px">'+esc(w)+(c.note?' '+esc(c.note):'')+'</p>';
+  // Amended is a caution, so it folds away to one line. Repealed and replaced laws stay fully visible.
+  if(c.state==='Amended') return '<details class="curd" style="margin:10px 0;border-left:4px solid var(--danger);background:var(--tint);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:600;font-size:14px">⚠ Amended: check the latest text</summary>'+body+'</details>';
+  return '<div style="margin:10px 0;border-left:4px solid var(--danger);background:var(--tint);border-radius:8px;padding:8px 12px"><strong>'+esc(c.state)+'</strong>'+body+'</div>';
+}
 function pills(ok){
-  var d=au.data, m='<span class="pill">by LawLink</span>';
-  if(au.status==='verified') m+='<span class="pill tip">✓ Verified</span>';
+  var d=au.data, m='<span class="pill">by Lex-Tabulā</span>';
+  if(au.status==='verified') m+='<span class="pill ver">✓ Verified</span>';
   else if(ok) m+='<span class="pill">Not yet verified</span>';
   if(au.kind!=='section'&&d){
     if(d.jurisdiction&&d.jurisdiction!=='Not confirmed') m+='<span class="pill">'+esc(d.jurisdiction)+'</span>';
-    if(d.inForce&&d.inForce!=='Not confirmed') m+='<span class="pill'+(d.inForce==='In force'?' tip':'')+'">'+esc(d.inForce)+'</span>';
+    if(d.currency) m+='<span class="pill'+(d.currency.state==='In force'?' tip':'')+'">'+esc(d.currency.state)+'</span>';
+    else if(d.inForce&&d.inForce!=='Not confirmed') m+='<span class="pill'+(d.inForce==='In force'?' tip':'')+'">'+esc(d.inForce)+'</span>';
     if(d.year&&d.year!=='Not confirmed') m+='<span class="pill">'+esc(d.year)+'</span>';
   }
   return m;
@@ -69,27 +79,90 @@ function subHit(subs){
   while(parts.length>1){ parts.pop(); var t=parts.join(''); for(i=0;i<subs.length;i++) if(norm(subs[i].ref)===t) return i; }
   return -1;
 }
+// ---- Official text, with the part a note cited marked ----
+// "(6)(b)" -> ["(6)","(b)"]
+function ptoks(s){ return (String(s||'').match(/\([^)]*\)/g)||[]).map(function(x){return x.toLowerCase().replace(/\s+/g,'');}); }
+function lineKey(l){ var m=/^\s*(\([^)]*\))/.exec(l); return m?m[1].toLowerCase().replace(/\s+/g,''):''; }
+var ROMAN=/^\((?:i{1,3}|iv|vi{0,3}|ix|xi{0,3}|xiv|xv)\)$/;
+// Finds the cited subsection in the official text and, inside it, the cited lettered line(s).
+// Returns {si: index of the subsection (-2 when the section has no numbered subsections), lines, hl: {line index: true}} or null when it is not there.
+function offFind(d){
+  if(!wantP||!wantP.sub||!d) return null;
+  var p=ptoks(wantP.sub); if(!p.length) return null;
+  var subs=d.subs||[], si=-1, text='', rest=p, i;
+  for(i=0;i<subs.length;i++) if(!subs[i].h&&norm(subs[i].ref)===p[0]){ si=i; break; }
+  if(si>-1){ text=subs[si].text||''; rest=p.slice(1); }
+  else if(!subs.length&&d.text){ si=-2; text=d.text; rest=p; }
+  else return null;
+  var lines=text.split('\n'), found=[], pos=0, k, j;
+  for(k=0;k<rest.length;k++){
+    for(j=pos;j<lines.length;j++) if(lineKey(lines[j])===rest[k]){ found.push(j); pos=j+1; break; }
+    if(found.length<=k) break;
+  }
+  if(rest.length&&!found.length) return si===-2?null:{si:si,lines:lines,hl:{},partial:true};
+  var hl={}, last=found.length?found[found.length-1]:-1;
+  if(last>-1){
+    hl[last]=true;
+    // a lettered line that is followed by an (i), (ii)… list owns that list
+    if(!ROMAN.test(lineKey(lines[last]))&&lineKey(lines[last+1])==='(i)'&&lineKey(lines[last+2])==='(ii)'){ for(j=last+1;j<lines.length&&ROMAN.test(lineKey(lines[j]));j++) hl[j]=true; }
+  }
+  return {si:si,lines:lines,hl:hl,partial:found.length<rest.length};
+}
+function markLines(lines,hl){ return lines.map(function(l,i){ return hl&&hl[i]?'<span class="omk">'+esc(l)+'</span>':esc(l); }).join('\n'); }
+function remHtml(rem){ return (rem||[]).map(function(t){ return '<p class="rmv"><span class="pill">Removed</span> <del>'+esc(t)+'</del></p>'; }).join(''); }
+// Was the part a note cited one of the words an amendment removed? e.g. cited (1)(h); removed: "(h) he has been indicted…" from subsection (1)
+function removedHit(d){
+  if(!wantP||!wantP.sub||!d||!d.removed) return false;
+  var w=ptoks(wantP.sub).join('');
+  return !!w&&d.removed.some(function(r){ return ptoks(r.sub).join('')+lineKey(r.text||'')===w; });
+}
+function openedBox(d,hit){
+  var t='You opened: '+esc(au.label+wantP.sub), gone=removedHit(d);
+  if(!hit) return '<div class="adm" style="margin-top:14px"><h3>'+t+'</h3><div>'+(gone?'That part was removed by an amendment. The words that were removed are shown below, under “Words removed by amendment”.':'That part was not found in the text of this section. The whole section is shown below.')+'</div></div>';
+  var s=hit.si>-1?d.subs[hit.si]:null;
+  return '<div class="adm" style="margin-top:14px"><h3>'+t+'</h3><p style="white-space:pre-wrap;margin:0">'+(s?'<strong>'+esc(s.ref)+'</strong> ':'')+markLines(hit.lines,hit.hl)+'</p>'+(hit.partial?'<p class="legend" style="margin:8px 0 0">'+(gone?'That part was removed by an amendment. The rest of the subsection is shown here, and the words that were removed are shown below, under “Words removed by amendment”.':Object.keys(hit.hl).length?'The exact part you asked for was not found. The closest part is marked.':'The exact part you asked for was not found, so the whole subsection is shown.')+'</p>':'')+'</div>';
+}
+function offHtml(d,hit){
+  var h='';
+  if(d.text) h+='<p style="white-space:pre-wrap">'+(hit&&hit.si===-2?markLines(hit.lines,hit.hl):esc(d.text))+'</p>';
+  (d.subs||[]).forEach(function(s,i){
+    if(s.h){ h+='<h3 style="margin:18px 0 6px;font-size:1.02em">'+esc(s.ref)+'</h3>'; return; }
+    var on=hit&&hit.si===i;
+    h+='<div class="osub'+(on?' hit':'')+'">'+(s.text||!s.removed?'<p style="white-space:pre-wrap"><strong>'+esc(s.ref)+'</strong> '+(on?markLines(hit.lines,hit.hl):esc(s.text))+'</p>':'<p><strong>'+esc(s.ref)+'</strong></p>')+remHtml(s.removed)+'</div>';
+  });
+  return h;
+}
+function changesHtml(d){
+  var h='';
+  if(d.amendments&&d.amendments.length) h+='<div class="kv"><h2>Changes by amendment</h2>'+d.amendments.map(function(a){ return '<div class="rel">'+esc(a)+'</div>'; }).join('')+'</div>';
+  if(d.removed&&d.removed.length) h+='<div class="kv"><h2>Words removed by amendment</h2><p class="legend" style="margin:2px 0 6px">These words are no longer part of the law. They are shown only so you can see what changed.</p>'+d.removed.map(function(r){ return '<div class="rel"><span class="cit">'+(r.sub?'From subsection '+esc(r.sub):'From the main text')+'</span><br><del>'+esc(r.text)+'</del></div>'; }).join('')+'</div>';
+  return h;
+}
 function renderSection(){
   var d=au.data, ok=au.status==='generated'||au.status==='verified';
   var lawLink=au.law?'<a class="auth" href="authority.html?id='+encodeURIComponent(au.law.id)+'">'+esc(au.law.name)+'</a>':'';
   $('hd').textContent=au.label||'Provision';
   $('ttl').textContent=au.label+(d&&d.heading?' – '+d.heading:'');
   $('meta').innerHTML=pills(ok)+(lawLink?'<span class="pill" style="background:none;border:0;padding-left:0">of '+lawLink+'</span>':'');
-  document.title='LawLink – '+au.name;
+  document.title='Lex-Tabulā – '+au.name;
   if(isAdmin){
     var b='<button class="btn" data-a="gen">'+(ok?'Write again':'Write this section')+'</button>';
     if(ok) b+='<button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark verified')+'</button>';
     $('admin').classList.remove('hidden');
     $('admin').innerHTML='<h3>Admin</h3><div>Status: '+esc(statusText())+'</div>'+(ok?'<div class="also">Writing it again clears the Verified mark.</div>':'')+'<div class="btns">'+b+'</div><div class="msg" id="amsg" role="status"></div>';
   }
-  var h='';
+  var h=curBox(au.law&&au.law.currency&&au.law.currency.state!=='In force'?au.law.currency:null);
   if(ok&&d&&d.official){
-    h+='<div class="kv"><h2>Official text</h2><div class="rich">'+(d.text?'<p style="white-space:pre-wrap">'+esc(d.text)+'</p>':'')+(d.subs||[]).map(function(s){return s.h?'<h3 style="margin:18px 0 6px;font-size:1.02em">'+esc(s.ref)+'</h3>':'<p style="white-space:pre-wrap"><strong>'+esc(s.ref)+'</strong> '+esc(s.text)+'</p>'}).join('')+'</div><p class="legend" style="margin:8px 0 0">From the official text of the law. Always check the latest amended version.</p></div>';
+    var oh=offFind(d), lc=au.law&&au.law.currency, hasOff=!!(d.text||(d.subs&&d.subs.length));
+    if(d.gap) h+='<div class="gapbox"><strong>Not complete yet</strong><p style="margin:4px 0 0">'+esc(d.gap)+'</p></div>';
+    if(hasOff&&wantP&&wantP.sub) h+=openedBox(d,oh);
+    if(hasOff) h+='<div class="kv"><h2>Official text</h2><div class="rich">'+offHtml(d,oh)+'</div><p class="legend" style="margin:8px 0 0">From the official text of the law. '+(lc&&lc.state==='In force'&&lc.note?esc(lc.note):'Always check the latest amended version.')+'</p></div>';
+    h+=changesHtml(d);
   }
   if(ok&&d&&(d.summary||!d.official)){
-    h+='<p class="legend" style="margin:6px 0 0">A short explanation written by LawLink. Check the official text before relying on it in an answer or in court.</p>';
+    h+='<p class="legend" style="margin:6px 0 0">A short explanation written by Lex-Tabulā. Check the official text before relying on it in an answer or in court.</p>';
     var hit=subHit(d.subsections);
-    if(wantP&&wantP.sub){
+    if(wantP&&wantP.sub&&!d.official){
       h+='<div class="adm" style="margin-top:14px"><h3>You opened: '+esc(au.label+wantP.sub)+'</h3>'+
         (hit>-1?'<div class="rich"><p><strong>'+esc(d.subsections[hit].ref)+'</strong> '+esc(d.subsections[hit].point)+'</p></div>':'<div>This part is not summarised here. See the full explanation below and the official text.</div>')+'</div>';
     }
@@ -103,16 +176,19 @@ function renderSection(){
   else if(au.status==='unverifiable'){
     h='<div class="soonbox"><h3>This could not be verified</h3><p>We could not confirm this provision, so no entry was written. It may have been cited with the wrong number.</p></div>';
   }else{
-    h='<div class="soonbox"><h3>Not available yet</h3><p>This section has not been written yet. Please check back soon.</p></div>';
+    h='<div class="soonbox"><h3>Not available yet</h3><p>This section has not been written yet.</p></div>';
     if(want) h+='<p class="legend">You opened: '+esc(want)+'</p>';
   }
   if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
   $('body').innerHTML=h;
   $('report').classList.toggle('hidden',!ok||isAdmin);
 }
+// Section keys such as 16a or 254f sit between their neighbours: 16 < 16a < 17.
+function kparts(k){ var m=/^(\d+)([a-z]*)$/.exec(String(k).toLowerCase()); return m?[+m[1],m[2]]:null; }
+function kcmp(a,b){ var x=kparts(a), y=kparts(b); if(!x||!y) return 0; return x[0]-y[0]||(x[1]<y[1]?-1:x[1]>y[1]?1:0); }
 function inG(k,g){
   var a=g.from,b=g.to;
-  if(/^\d+$/.test(a)){ var n=parseInt(k,10); return /^\d/.test(k)&&n>=+a&&n<=+b; }
+  if(/^\d+[a-z]*$/.test(a)){ return /^\d+[a-z]*$/.test(k)&&kcmp(k,a)>=0&&kcmp(k,b)<=0; }
   if(/^sch\d+$/.test(a)&&/^sch\d+$/.test(k)) return +k.slice(3)>=+a.slice(3)&&+k.slice(3)<=+b.slice(3);
   return k===a;
 }
@@ -130,27 +206,90 @@ function secRows(list,filterText,chap){
    .map(function(s){
      var g=grpOf(s), head='';
      if(g){ var gl=g.chapter+'|'+g.part; if(gl!==last){ last=gl; head='<h3 class="ghead" style="margin:16px 0 6px;font-size:.95rem">'+esc(g.chapter)+(g.part?'<div class="legend" style="margin:2px 0 0;font-weight:400">'+esc(g.part)+'</div>':'')+'</h3>'; } }
-     var st=s.status==='verified'?'✓ Verified':(isAdmin?(s.status==='generated'?'Written':s.status==='unverifiable'?'Could not be verified':'Not written yet'):'');
+     var st=[s.status==='verified'?'✓ Verified':(isAdmin?(s.status==='generated'?'Written':s.status==='unverifiable'?'Could not be verified':'Not written yet'):''), s.gap?'Incomplete':''].filter(Boolean).join(' · ');
      return head+'<a class="crow" href="authority.html?id='+encodeURIComponent(s.id)+'"><strong>'+esc(s.label+(s.heading?' – '+s.heading:''))+'</strong>'+(st?'<span class="m">'+esc(st)+(isAdmin&&s.count?' · cited '+s.count+'×':'')+'</span>':'')+'</a>';
    }).join('');
+}
+function rowHtml(s){
+  var st=[s.status==='verified'?'✓ Verified':(isAdmin?(s.status==='generated'?'Written':s.status==='unverifiable'?'Could not be verified':'Not written yet'):''), s.gap?'Incomplete':''].filter(Boolean).join(' · ');
+  return '<a class="crow" href="authority.html?id='+encodeURIComponent(s.id)+'"><strong>'+esc(s.label+(s.heading?' – '+s.heading:''))+'</strong>'+(st?'<span class="m">'+esc(st)+(isAdmin&&s.count?' · cited '+s.count+'×':'')+'</span>':'')+'</a>';
+}
+// Contents: Preamble, each Chapter with its Parts, and the Schedules, as groups that open when tapped.
+function tocHtml(){
+  var gs=(au.data&&au.data.groups)||[]; if(!gs.length) return '';
+  var vis=(au.sections||[]).filter(function(s){ return isAdmin||s.status==='generated'||s.status==='verified'; });
+  var chapters=[], cidx={};
+  gs.forEach(function(g){ if(!(g.chapter in cidx)){ cidx[g.chapter]=chapters.length; chapters.push({name:g.chapter,parts:[]}); } chapters[cidx[g.chapter]].parts.push({name:g.part,g:g,secs:[]}); });
+  var other=[];
+  vis.forEach(function(s){ var placed=false; for(var i=0;i<chapters.length&&!placed;i++) for(var j=0;j<chapters[i].parts.length;j++) if(inG(s.key,chapters[i].parts[j].g)){ chapters[i].parts[j].secs.push(s); placed=true; break; } if(!placed) other.push(s); });
+  if(other.length) chapters.push({name:'Other provisions',parts:[{name:'',g:null,secs:other}]});
+  var h='';
+  chapters.forEach(function(ch){
+    var all=[]; ch.parts.forEach(function(p){ all=all.concat(p.secs); }); if(!all.length) return;
+    if(all.length===1&&ch.parts.length===1){ h+=rowHtml(all[0]); return; }
+    var nums=all.map(function(s){return /^\d+/.test(s.key)?parseInt(s.key,10):null}).filter(function(x){return x!==null});
+    var isSch=all.every(function(s){return /^sch\d+$/.test(s.key)});
+    var range=isSch?all.length+' schedules':(nums.length?(nums.length>1&&Math.min.apply(null,nums)!==Math.max.apply(null,nums)?'ss. '+Math.min.apply(null,nums)+'–'+Math.max.apply(null,nums):'s. '+nums[0]):all.length+' provisions');
+    h+='<details class="toc"><summary><span>'+esc(ch.name)+'</span><small>'+esc(range)+'</small></summary><div class="tocin">'+ch.parts.map(function(p){ return p.secs.length?((p.name?'<div class="tocpart">'+esc(p.name)+'</div>':'')+p.secs.map(rowHtml).join('')):''; }).join('')+'</div></details>';
+  });
+  return h;
+}
+function jump(){
+  var v=($('sf')?$('sf').value:'').trim().toLowerCase().replace(/^(s|sec|section)\.?\s*/,'').replace(/\s+/g,'');
+  if(!/^[a-z0-9-]+$/.test(v)) return false;
+  var m=(au.sections||[]).filter(function(s){ return s.key===v&&(isAdmin||s.status==='generated'||s.status==='verified'); })[0];
+  if(m){ location.href='authority.html?id='+encodeURIComponent(m.id); return true; }
+  return false;
 }
 function drawSecs(){
   var el=$('secs'); if(!el) return;
   var q=$('sf')?$('sf').value:'', c=$('cg')?$('cg').value:'';
+  if(!q&&!c){ var t=tocHtml(); if(t){ el.innerHTML=t; return; } }
   var rows=secRows(au.sections||[], q, c);
   el.innerHTML=rows||'<p class="legend">'+((q||c)?'No section matches.':'No sections have been written yet.')+'</p>';
 }
 function chapSelect(){
+  return '';
   var gs=(au.data&&au.data.groups)||[], seen={}, o='<option value="">All chapters and parts</option>';
   gs.forEach(function(g){ if(!seen[g.chapter]){ seen[g.chapter]=1; o+='<option value="'+esc(g.chapter)+'">'+esc(g.chapter)+'</option>'; } });
   return gs.length?'<select id="cg" class="f" aria-label="Choose a chapter" style="margin:6px 0 10px;width:100%;padding:10px;font-size:16px;border-radius:10px">'+o+'</select>':'';
 }
+function curAdmin(){
+  var c=(au.data&&au.data.currency)||{}, o=['','In force','Amended','Repealed','Superseded'].map(function(x){return '<option value="'+x+'"'+(x===(c.state||'')?' selected':'')+'>'+(x||'Not set')+'</option>'}).join('');
+  return '<div class="also" style="margin-top:12px">Year and current status. Only you set these. Students see a warning for anything other than In force.</div>'+
+    '<input class="in" id="cyr" maxlength="20" placeholder="Year first enacted, e.g. 2011" value="'+esc((au.data&&au.data.year)||'')+'"><select class="in" id="cst" aria-label="Currency">'+o+'</select><input class="in" id="cnote" maxlength="400" placeholder="Note, e.g. Replaced by the Evidence Act 2011" value="'+esc(c.note||'')+'"><input class="in" id="cat" maxlength="40" placeholder="Checked on, e.g. 17 Oct 2026" value="'+esc(c.asAt||'')+'">'+
+    '<div class="btns"><button class="btn alt" data-a="cursave">Save status</button></div>';
+}
+// A Maxim of Equity is a single short page: meaning, how it is used, exam tip. No sections, no year, no Gemini.
+function renderMaxim(){
+  var d=au.data||{}, ok=au.status==='generated'||au.status==='verified';
+  $('hd').textContent='Maxim of Equity';
+  $('ttl').textContent=au.name;
+  document.title='Lex-Tabulā – '+au.name;
+  $('meta').innerHTML=pills(ok);
+  if(isAdmin){
+    $('admin').classList.remove('hidden');
+    $('admin').innerHTML='<h3>Admin</h3><div>Status: '+esc(statusText())+'</div><div class="also">Check the explanation against your textbook. Tap Mark verified when you are satisfied. The wording is refreshed from the Statutes page and a verified maxim is never changed there.</div>'+
+      (ok?'<div class="btns"><button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark verified')+'</button></div>':'')+'<div class="msg" id="amsg" role="status"></div>';
+  }
+  var h='';
+  if(ok){
+    h+='<p class="legend" style="margin:6px 0 0">Written by Lex-Tabulā in its own words. Check it against your textbook before relying on it in an answer.</p>';
+    h+=sec('Meaning',d.overview)+sec('How it is used',d.use)+sec('Exam tip',d.tip);
+  }else if(!isAdmin){
+    h+='<div class="soonbox"><h3>Not available yet</h3><p>This page has not been written up yet.</p></div>';
+  }
+  if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
+  $('body').innerHTML=h;
+  $('report').classList.toggle('hidden',!ok||isAdmin);
+}
 function renderLaw(){
+  if(au.type==='max') return renderMaxim();
   var d=au.data, ok=au.status==='generated'||au.status==='verified';
   var secs=au.sections||[], missing=secs.filter(function(s){return s.status==='cited'||(s.hasText&&!s.expl)}).length;
   $('hd').textContent=TYPES[au.type]||'Statute';
   $('ttl').textContent=au.name;
-  document.title='LawLink – '+au.name;
+  document.title='Lex-Tabulā – '+au.name;
   $('meta').innerHTML=pills(ok);
   if(isAdmin){
     var b='<button class="btn" data-a="all"'+(busy?' disabled':'')+'>Write missing explanations</button>'+
@@ -158,25 +297,32 @@ function renderLaw(){
     if(ok) b+='<button class="btn alt" data-a="verify">'+(au.status==='verified'?'Remove verified':'Mark overview verified')+'</button>';
     $('admin').classList.remove('hidden');
     $('admin').innerHTML='<h3>Admin</h3><div>Overview: '+esc(statusText())+'</div>'+
-      '<div class="also">'+secs.length+' section'+(secs.length===1?'':'s')+' cited in notes, '+missing+' not written yet. Each section is written and verified on its own page.</div>'+
-      '<div class="btns">'+b+'</div><div id="mbox"></div><div class="msg" id="amsg" role="status"></div>';
+      '<div class="also">'+secs.length+' section'+(secs.length===1?'':'s')+' in this law, '+missing+' still without a short explanation. Each section is written and verified on its own page.</div>'+
+      (secs.some(function(s){return s.gap})?'<div class="also">Parts of the text are missing for now: '+esc(secs.filter(function(s){return s.gap}).map(function(s){return s.label}).join(', '))+'. They are marked Incomplete in the contents.</div>':'')+
+      '<div class="btns">'+b+'</div><div id="mbox"></div>'+curAdmin()+'<div class="msg" id="amsg" role="status"></div>';
   }
-  var h='';
+  var h=curBox(d&&d.currency);
   if(ok&&d){
-    h+='<p class="legend" style="margin:6px 0 0">A short overview written by LawLink. Check the official text before relying on it in an answer or in court.</p>';
+    h+='<p class="legend" style="margin:6px 0 0">A short overview written by Lex-Tabulā. Check the official text before relying on it in an answer or in court.</p>';
     h+=sec('Overview',d.overview)+sec('Purpose and scope',d.purpose)+sec('Amendments and current status',d.amendments);
   }else if(au.status==='unverifiable'){
     h='<div class="soonbox"><h3>This could not be verified</h3><p>We could not confirm this law, so no overview was written. It may have been cited with the wrong name.</p></div>';
+  }else if(!isAdmin){
+    h+='<div class="soonbox"><h3>Not available yet</h3><p>This law has not been written up yet. Until it is, read the law itself, and ask your lecturer if you are unsure.</p></div>';
   }
-  h+='<div class="kv"><h2>Sections</h2>'+chapSelect()+(secs.length>8?'<label class="search" style="margin:6px 0 10px"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="sf" placeholder="Find a section or chapter, e.g. 84 or fundamental rights" aria-label="Find a section"></label>':'')+'<div id="secs"></div></div>';
+  var hasToc=!!((d&&d.groups)||[]).length;
+  var secBlock='<div class="kv"><h2>'+(hasToc?'Contents':'Sections')+'</h2>'+(secs.length>8?'<label class="search" style="margin:6px 0 10px"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="sf" enterkeyhint="go" placeholder="Section number or heading" aria-label="Go to a section or search"></label>':'')+'<div id="secs"></div></div>';
+  if(hasToc) h=secBlock+h; else h+=secBlock;
   if(au.citedIn&&au.citedIn.length) h+='<div class="kv"><h2>Cited in</h2>'+au.citedIn.slice().reverse().map(function(n){return '<div class="rel">'+noteLink(n)+'</div>'}).join('')+'</div>';
   $('body').innerHTML=h;
   drawSecs();
-  if($('sf')) $('sf').oninput=drawSecs;
+  if($('sf')){ $('sf').oninput=drawSecs; $('sf').onkeydown=function(e){ if(e.key==='Enter'&&jump()) e.preventDefault(); }; }
   if($('cg')) $('cg').onchange=drawSecs;
   $('report').classList.toggle('hidden',!ok||isAdmin);
 }
-function render(){ if(au.kind==='section') renderSection(); else renderLaw(); }
+function bmPaint(){ var b=$('bm'); if(b) b.textContent=Prog.isBm(au.id)?'★ Saved':'☆ Save'; }
+function render(){ if(au.kind==='section') renderSection(); else renderLaw(); bmPaint(); }
+$('bm').onclick=function(){ if(!au) return; Prog.toggleBm(au.id,au.name,'a'); bmPaint(); };
 async function load(fresh){
   try{ au=await LawLink.getAuth(id,fresh); if(au.id&&au.id!==id){ location.replace('authority.html?id='+encodeURIComponent(au.id)+location.search.replace(/^\?id=[^&]*/,'').replace(/^&/,'&')); return; } render(); }
   catch(e){ if(/log in|expired/i.test(e.message)){setToken(null);location.replace('login.html');return} $('ttl').textContent='Not found'; $('body').innerHTML='<div class="soonbox"><p>'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p></div>'; }
@@ -211,6 +357,11 @@ async function writeAll(btn){
 $('admin').addEventListener('click',async function(e){
   var b=e.target.closest('[data-a]'); if(!b||busy) return; var a=b.dataset.a, m=$('amsg');
   if(a==='all') return writeAll(b);
+  if(a==='cursave'){
+    busy=true; try{ au=await LawLink.lawCurrency(au.id,$('cst').value,$('cnote').value.trim(),$('cat').value.trim(),$('cyr').value.trim()); render(); $('amsg').textContent='Saved.'; $('amsg').className='msg'; }
+    catch(x){ m.textContent=x.message; m.className='msg err'; } finally{ busy=false; }
+    return;
+  }
   if(a==='merge'){
     var mb=$('mbox'); mb.innerHTML='<div class="also">Use this when the same law was added twice under different names. This law is removed. Its sections and citations move to the law you choose, and the old name keeps working.</div><select class="in" id="mto" aria-label="Merge into"><option value="">Loading laws…</option></select><div class="btns" style="margin-top:8px"><button class="btn" data-a="mergego">Merge now</button></div>';
     try{ var ls=await LawLink.listAuth(au.type==='case'?'auth':'auth',true); $('mto').innerHTML='<option value="">Choose the law to keep</option>'+ls.filter(function(x){return x.id!==au.id}).map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>'}).join(''); }

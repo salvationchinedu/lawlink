@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LawLink – Courses</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Lex-Tabulā – Courses</title>
 <link rel="stylesheet" href="style.css">
 <script src="ui.js"></script>
 </head>
@@ -44,8 +43,8 @@
 var $=function(i){return document.getElementById(i)};
 if(!getToken()){ location.replace('login.html'); return; }
 
-var GROUPS=['core','elective','general','none'], group='All', sorting=false, isAdmin=false, hidden=[];
-var NAMES={'core':'Core courses','elective':'Electives','general':'General courses','none':'Not sorted yet'};
+var GROUPS=['core','elective','general','none'], group=(function(){ var g=new URLSearchParams(location.search).get('g'); return ['core','elective','general','none','Saved'].indexOf(g)>-1?g:'All'; })(), sorting=false, isAdmin=false, hidden=[];
+var NAMES={'core':'Core courses','elective':'Electives','general':'General courses','none':'Other courses'};
 var CHIPS=[['All','All'],['core','Core'],['elective','Electives'],['general','General'],['none','Not sorted'],['Saved','Saved']];
 
 function norm(s){return String(s).toLowerCase()}
@@ -63,25 +62,35 @@ function render(){
   document.querySelectorAll('#chips .chip').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.g===group)});
   $('sortbtn').textContent=sorting?'Done sorting':'Sort my courses';
   $('sorthint').textContent=sorting?'Tap Core, Elective or General under each course. Your choice is private to you.':'';
+  var SEM=[]; try{ SEM=JSON.parse(localStorage.getItem('lawlink-sem')||'[]')||[]; }catch(e){}
+  function rowHtml(r){
+    var c=r.c, n=topicsOf(c).length, cur=tagOf(c), h='';
+    var dn=Prog.doneIn(c.id), pc=n?Math.round(dn/n*100):0;
+    var gk={'Core':'core','Electives':'elec','Islamic law':'isl','General':'gen'}[c.group]||'core';
+    var left=(c.cle===2?'<b>★</b> ':c.cle===1?'<b>†</b> ':'')+esc(c.group)+(P.saved[c.id]?' (saved)':'');
+    h+='<div class="crowwrap"><a class="vol g-'+gk+'" href="course.html?id='+encodeURIComponent(c.id)+'"><strong>'+esc(c.name)+'</strong><span class="vm"><span>'+left+'</span><span>'+(dn?'<b>'+dn+' of '+n+' learnt</b>':(n?n+' topics':''))+'</span></span>'+(dn?'<span class="vbar"><i style="width:'+pc+'%"></i></span>':'')+(r.m.topic?'<span class="hit">Topic: '+esc(r.m.topic)+'</span>':'')+'</a>';
+    if(sorting) h+='<div class="tagrow" role="group" aria-label="Sort '+esc(c.name)+'">'+[['core','Core'],['elective','Elective'],['general','General']].map(function(o){return '<button class="chip" data-cid="'+esc(c.id)+'" data-t="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>'}).join('')+'</div>';
+    return h+'</div>';
+  }
+  var semRows=[], sorted=COURSES.some(function(c){ return tagOf(c)!=='none'; });
+  if(SEM.length&&group==='All'){
+    COURSES.forEach(function(c){ if(SEM.indexOf(c.id)<0) return; var m=match(c,q); if(m) semRows.push({c:c,m:m}); });
+    semRows.sort(function(a,b){return a.m.rank-b.m.rank||a.c.name.localeCompare(b.c.name)});
+    if(semRows.length){ total+=semRows.length; html+='<div class="gh">My courses this semester<small>'+semRows.length+'</small></div>'+semRows.map(rowHtml).join(''); }
+  }
   GROUPS.forEach(function(g){
     if(group!=='All'&&group!=='Saved'&&group!==g) return;
     var rows=[];
-    COURSES.forEach(function(c){ if(tagOf(c)!==g) return; if(group==='Saved'&&!P.saved[c.id]) return; var m=match(c,q); if(m) rows.push({c:c,m:m}); });
+    COURSES.forEach(function(c){ if(tagOf(c)!==g) return; if(group==='All'&&SEM.indexOf(c.id)>-1) return; if(group==='Saved'&&!P.saved[c.id]) return; var m=match(c,q); if(m) rows.push({c:c,m:m}); });
     rows.sort(function(a,b){return a.m.rank-b.m.rank||a.c.name.localeCompare(b.c.name)});
     if(!rows.length) return;
     total+=rows.length;
-    html+='<div class="gh">'+NAMES[g]+'<small>'+rows.length+'</small></div>';
-    rows.forEach(function(r){
-      var c=r.c, n=topicsOf(c).length, cur=tagOf(c);
-      var meta=(n?n+' topics':'Topics coming soon')+badge(c)+(P.saved[c.id]?' · Saved':'');
-      html+='<div class="crowwrap"><a class="crow" href="course.html?id='+encodeURIComponent(c.id)+'"><strong>'+esc(c.name)+'</strong><span class="m">'+esc(meta)+'</span>'+(r.m.topic?'<span class="hit">Topic: '+esc(r.m.topic)+'</span>':'')+'</a>';
-      if(sorting) html+='<div class="tagrow" role="group" aria-label="Sort '+esc(c.name)+'">'+[['core','Core'],['elective','Elective'],['general','General']].map(function(o){return '<button class="chip" data-cid="'+esc(c.id)+'" data-t="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>'}).join('')+'</div>';
-      html+='</div>';
-    });
+    html+=(g==='none'&&!sorted&&!semRows.length?'':'<div class="gh">'+NAMES[g]+'<small>'+rows.length+'</small></div>')+rows.map(rowHtml).join('');
   });
   $('count').textContent=total+(total===1?' course':' courses');
   $('list').innerHTML=html||'<div class="empty"><h3>No courses match</h3><p>'+(group==='Saved'?'You have not saved any courses yet. Open a course and tap Save course.':group==='none'?'Every course has been sorted.':'Try a different word, like "tort" or "equity".')+'</p></div>';
 }
+try{ if(LawLink.loggedIn()&&!sessionStorage.getItem('lawlink-semchk')){ sessionStorage.setItem('lawlink-semchk','1'); LawLink.getProfile().then(function(d){ var a=JSON.stringify(d.profile.sem||[]); if(a!==(localStorage.getItem('lawlink-sem')||'[]')){ localStorage.setItem('lawlink-sem',a); render(); } }).catch(function(){}); } }catch(e){}
 $('chips').innerHTML=CHIPS.map(function(g){return '<button class="chip" data-g="'+g[0]+'" aria-pressed="false">'+g[1]+'</button>'}).join('');
 $('chips').onclick=function(e){var b=e.target.closest('.chip');if(b){group=b.dataset.g;render()}};
 $('sortbtn').onclick=function(){sorting=!sorting;render()};

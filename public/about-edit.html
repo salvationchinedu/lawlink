@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Edit the About page</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<script src="about-default.js"></script>
+<style>
+.inp{width:100%;padding:12px;font:inherit;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+textarea.inp{min-height:340px;resize:vertical;line-height:1.5}
+.hint{color:var(--muted);font-size:14px;margin:6px 0}
+.pv{border:1px solid var(--line);border-radius:12px;padding:6px 16px 14px;margin-top:10px;background:var(--surface)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="settings.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>About page</h1>
+  </header>
+  <main id="main" class="narrow">
+    <div id="deny" class="empty hidden"><h3>Admins only</h3><p>This page is for the admin.</p></div>
+    <div id="box" class="hidden">
+      <p class="hint">Students see this text on the About page. Until you save your own version they see the built-in text.</p>
+      <p class="hint"><b>Format:</b> start a heading with <code>## </code>, a bullet with <code>- </code>, put **two stars** around bold words, and leave a blank line between paragraphs. Web addresses starting with https:// and email addresses become links by themselves.</p>
+      <textarea class="inp" id="t" spellcheck="true"></textarea>
+      <div class="btns"><button class="btn" id="save" type="button">Save</button><button class="btn alt" id="pv" type="button">Preview</button><button class="btn alt" id="reset" type="button">Use built-in text</button></div>
+      <div class="msg" id="msg" role="status"></div>
+      <div class="about pv hidden" id="prev"></div>
+    </div>
+  </main>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!LawLink.loggedIn()){ location.replace('login.html?next=about-edit.html'); return; }
+function msg(t,err){ var m=$('msg'); m.className='msg'+(err?' err':t?' ok':''); m.textContent=t||''; }
+function preview(){ $('prev').innerHTML=window.aboutHtml($('t').value); $('prev').classList.remove('hidden'); }
+LawLink.me().then(function(u){
+  if(u.role!=='admin'){ $('deny').classList.remove('hidden'); return; }
+  $('box').classList.remove('hidden');
+  LawLink.aboutGet().then(function(o){ $('t').value=o.text||window.ABOUT_DEFAULT; }).catch(function(){ $('t').value=window.ABOUT_DEFAULT; });
+});
+$('pv').onclick=preview;
+$('save').onclick=async function(){
+  var b=$('save'); b.disabled=true; msg('');
+  try{
+    var txt=$('t').value.trim(), builtin=!txt||txt===window.ABOUT_DEFAULT.trim();
+    await LawLink.aboutSet(builtin?'':txt);
+    try{ localStorage.removeItem('lawlink-about'); }catch(e){}
+    if(builtin){ $('t').value=window.ABOUT_DEFAULT; msg('Saved. Students now see the built-in text.'); }
+    else msg('Saved. Students now see this text.');
+    if(!$('prev').classList.contains('hidden')) preview();
+  }catch(e){ msg(e.message,true); }
+  b.disabled=false;
+};
+$('reset').onclick=function(){
+  if(!confirm('Replace your text with the built-in text?')) return;
+  $('t').value=window.ABOUT_DEFAULT; msg('Built-in text loaded. Press Save to publish it.');
+  if(!$('prev').classList.contains('hidden')) preview();
+};
+})();
+</script>
+</body>
+</html>

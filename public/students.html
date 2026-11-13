@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Students</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.srow{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}
+.srow b{display:block}
+.srow .m{color:var(--muted);font-size:14px;word-break:break-word}
+.srow .btns{margin-top:8px}
+.inp{width:100%;padding:12px;font:inherit;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="settings.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Students</h1>
+  </header>
+  <main>
+    <p class="hint" id="tot" style="color:var(--muted)">Loading…</p>
+    <input class="inp" id="q" type="search" placeholder="Search by name, email or watermark code" aria-label="Search students">
+    <div class="btns" style="margin:10px 0"><button class="btn alt" id="csv">Download all as CSV</button></div>
+    <div class="msg" id="msg" role="status"></div>
+    <div id="list"></div>
+    <div class="btns" style="justify-content:center"><button class="btn alt hidden" id="more">Show more</button></div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var next='', q='', timer=0, seq=0;
+function say(t,err){ var m=$('msg'); m.className='msg'+(err?' err':''); m.textContent=t; }
+function ago(ts){ if(!ts) return 'never'; var d=Math.floor((Date.now()-ts)/86400000); return d<1?'today':d===1?'yesterday':d+' days ago'; }
+function dt(ts){ return new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
+function row(s){
+  return '<div class="srow"><b>'+esc(s.name)+'</b><div class="m">'+esc(s.email)+(s.phone?' · '+esc(s.phone):'')+'</div><div class="m">Watermark code: '+(s.code?'<b>'+esc(s.code)+'</b>':'not issued yet')+'</div><div class="m">'+(s.uni?esc(s.uni):'University not given')+(s.yr?' · '+esc(s.yr):'')+'</div><div class="m">Joined '+dt(s.joined)+' · Last backup '+ago(s.seen)+'</div><div class="btns"><button class="btn ghost" data-r="'+esc(s.id)+'" style="padding:8px 12px;font-size:14px">Reset name</button></div></div>';
+}
+async function load(more){
+  var my=++seq; if(!more){ next=''; $('list').innerHTML=''; }
+  say(''); $('more').classList.add('hidden');
+  try{
+    var d=await LawLink.usersList(q,more?next:'',50); if(my!==seq) return;
+    if(d.total!==undefined) $('tot').textContent=d.total+' student'+(d.total===1?'':'s')+' have signed in.';
+    else if(!more) $('tot').textContent=d.rows.length?'Results for "'+q+'"':'No students match "'+q+'".';
+    $('list').insertAdjacentHTML('beforeend',d.rows.map(row).join(''));
+    next=d.next; $('more').classList.toggle('hidden',!next);
+  }catch(e){ say(e.message,1); }
+}
+$('q').oninput=function(){ clearTimeout(timer); timer=setTimeout(function(){ q=$('q').value.trim(); load(false); },350); };
+$('more').onclick=function(){ load(true); };
+$('list').onclick=async function(e){
+  var b=e.target.closest('[data-r]'); if(!b) return;
+  if(!confirm('Replace this student\'s name with a generic one? Use this for names that were reported. They can then choose a new name.')) return;
+  b.disabled=true;
+  try{ var d=await LawLink.usersResetName(b.dataset.r); b.closest('.srow').querySelector('b').textContent=d.name; say('Name reset to '+d.name+'.'); }
+  catch(er){ say(er.message,1); } finally{ b.disabled=false; }
+};
+function cell(v){ v=String(v==null?'':v); if(/^[=+\-@\t\r]/.test(v)) v="'"+v; return '"'+v.replace(/"/g,'""')+'"'; }
+$('csv').onclick=async function(){
+  var b=$('csv'); b.disabled=true; var lines=['Name,Email,Code,Phone,University,Year,Joined,Last backup'], cur='', n=0;
+  try{
+    for(var i=0;i<100;i++){
+      say('Preparing… '+n+' students');
+      var d=await LawLink.usersList(q,cur,2000);
+      d.rows.forEach(function(s){ n++; lines.push([cell(s.name),cell(s.email),cell(s.code||''),cell(s.phone),cell(s.uni),cell(s.yr),cell(new Date(s.joined).toISOString().slice(0,10)),cell(s.seen?new Date(s.seen).toISOString().slice(0,10):'')].join(',')); });
+      cur=d.next; if(!cur) break;
+    }
+    var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'})); a.download='lawlink-students.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+    say('Downloaded '+n+' students.');
+  }catch(e){ say(e.message,1); } finally{ b.disabled=false; }
+};
+load(false);
+})();
+</script>
+</body>
+</html>

@@ -2519,12 +2519,14 @@ var COURSES=[
   try { cache = JSON.parse(localStorage.getItem(K)); } catch (e) { cache = null; }
   if (cache && cache.items) apply(cache.items);
   window.refreshCourses = function (force) {
+    var adm = false; try { var tk = localStorage.getItem('lawlink-token'); adm = !!(tk && JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).adm); } catch (e) {}
+    if (!force && !adm && cache && cache.t && Date.now() - cache.t < 6 * 3600000) return Promise.resolve();
     return fetch('/api', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'courses.list' }) })
       .then(function (r) { return r.json(); })
       .then(function (o) {
         if (!o || !o.ok) return;
         var old = cache ? cache.v : 0;
-        try { localStorage.setItem(K, JSON.stringify({ v: o.data.v, items: o.data.items })); } catch (e) {}
+        try { localStorage.setItem(K, JSON.stringify({ v: o.data.v, items: o.data.items, t: Date.now() })); } catch (e) {}
         if (o.data.v !== old || force) {
           var ae = document.activeElement, busy = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
           var seen = ''; try { seen = sessionStorage.getItem('lawlink-creload'); } catch (e) {}

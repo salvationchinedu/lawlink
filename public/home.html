@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Home</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <h1><span class="wm"><svg class="wmk" viewBox="0 0 28 32" aria-hidden="true"><path d="M2 30V14a12 12 0 0 1 24 0v16z"/><path class="ln" d="M8 14h4M8 20h4M8 26h4M15 14h5M15 20h5M15 26h5"/></svg><span class="wt"><span class="lx">Lex</span><span class="hy">-</span><span class="tb">Tabul<span class="ma">ā</span></span></span></span></h1>
+  <a class="bell" href="notices.html" aria-label="Announcements"><svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg><i id="bdot" hidden></i></a>
+</header>
+
+<div class="hero">
+  <h1 id="hi">Welcome</h1>
+  <p class="sub" id="lvl">&nbsp;</p>
+  <form class="search" id="sf" role="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input type="search" id="q" placeholder="Search courses, topics and notes" aria-label="Search courses, topics and notes">
+  </form>
+</div>
+
+<main>
+<section id="cont" class="hidden" style="margin-top:16px">
+  <div id="contbody"></div>
+  <div id="strip"></div>
+</section>
+
+<section id="mycourses" class="hidden" style="margin-top:22px">
+  <div class="sh"><h2>Your courses</h2><a href="progress.html">My progress</a></div>
+  <div id="cbody"></div>
+</section>
+
+<section id="tools">
+  <div class="sh"><h2>Study tools</h2></div>
+  <div class="grid">
+    <a class="tile" href="plan.html"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 9l2 2 4-4M9 15h6"/></svg><strong>Study plan</strong><span>Next up, retakes and revision</span></a>
+    <a class="tile" href="authorities.html"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M10 12h6M10 16h6"/></svg><strong>Statutes</strong><span>Acts, rules and treaties</span></a>
+    <a class="tile" href="authorities.html?k=cases"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-2 7a3 3 0 0 0 4 0zM19 7l-2 7a3 3 0 0 0 4 0z"/></svg><strong>Cases</strong><span>Cases cited in notes</span></a>
+    <a class="tile" href="performance.html"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-7"/></svg><strong>Performance</strong><span>Scores and trends</span></a>
+  </div>
+</section>
+
+<section>
+  <div class="sh"><h2>Recent notes</h2><a href="notes.html">See all</a></div>
+  <div class="card" id="recent"><div class="empty">Loading…</div></div>
+</section>
+</main>
+
+<nav class="nav" aria-label="Main"><div>
+  <a href="home.html" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+  <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+  <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+  <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+  <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+</div></nav>
+</div>
+
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script src="tour.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)}, UK='lawlink-user', CK='lawlink-notes-cache';
+if(!getToken()){ location.replace('login.html'); return; }
+
+function greet(u){
+  var h=new Date().getHours(), g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  $('hi').textContent=g+', '+String(u.name).split(' ')[0];
+  var UN=''; try{ UN=localStorage.getItem('lawlink-uni')||''; }catch(e){}
+  $('lvl').textContent=UN;
+  if(!UN&&!window.__uniAsked){ window.__uniAsked=1; LawLink.getProfile().then(function(d){ var x=(d&&d.profile&&d.profile.uni)||''; if(x){ try{ localStorage.setItem('lawlink-uni',x); }catch(e){} $('lvl').textContent=x; } }).catch(function(){}); }
+}
+function ago(ts){var d=Math.floor((Date.now()-ts)/86400000);return d<1?'Edited today':d===1?'Edited yesterday':'Edited '+d+' days ago'}
+function recent(list){
+  var r=list.slice().sort(function(a,b){return b.ts-a.ts}).slice(0,3);
+  $('recent').innerHTML=r.length?r.map(function(n){
+    return '<a class="note" href="notes.html"><h3>'+esc(n.title||'Untitled note')+'</h3><div class="meta">'+esc(n.course)+(n.topic?', '+esc(n.topic):'')+' · '+ago(n.ts)+'</div></a>';
+  }).join(''):'<div class="empty"><h3>No notes yet</h3><p>Your latest notes will show up here.</p><a class="btn" href="notes.html">Write a note</a></div>';
+}
+function authFail(e){ if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html'); return true; } return false; }
+
+// Instant render from saved copies, then refresh.
+try{ var u=JSON.parse(localStorage.getItem(UK)); if(u) greet(u); }catch(e){}
+try{ var c=JSON.parse(localStorage.getItem(CK)); if(c) recent(c); }catch(e){}
+
+LawLink.me().then(function(u){ greet(u); try{localStorage.setItem(UK,JSON.stringify(u))}catch(e){} }).catch(authFail);
+LawLink.listNotes().then(function(l){ recent(l); try{localStorage.setItem(CK,JSON.stringify(l))}catch(e){} })
+  .catch(function(e){ if(authFail(e)) return; if($('recent').textContent==='Loading…') $('recent').innerHTML='<div class="empty">Could not load notes. Check your data and try again.</div>'; });
+
+(function(){
+  var P=Prog.get(), html='', PLAY='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  function cnt(c){ var t=0; c.parts.forEach(function(x){t+=x.topics.length}); return t; }
+  if(P.last&&P.last.c){
+    var L=P.last, href='note.html?c='+encodeURIComponent(L.c)+(L.p!==null&&L.p!==undefined?'&p='+L.p+'&i='+L.i:'');
+    var cc=COURSES.filter(function(c){return c.id===L.c})[0], nn=cc?cnt(cc):0, dd=cc?Prog.doneIn(cc.id):0, pos=0;
+    if(cc&&L.p!==null&&L.p!==undefined&&cc.parts[L.p]){ for(var k=0;k<L.p;k++) pos+=cc.parts[k].topics.length; pos+=Number(L.i)+1; }
+    html+='<a class="hc" href="'+href+'"><div class="hl">Continue · '+esc(L.cn)+'</div><div class="ht">'+esc(L.t)+'</div>'+(nn?'<div class="hb"><i style="width:'+Math.round(dd/nn*100)+'%"></i></div>':'')+'<div class="hf"><span class="go">'+PLAY+'Resume reading</span>'+(pos>0&&pos<=nn?'<span class="hn">Topic '+pos+' of '+nn+'</span>':'')+'</div></a>';
+  }else{
+    // nothing read yet: one clear place to begin
+    html+='<a class="hc" href="courses.html"><div class="hl">Your courses</div><div class="ht">Choose a course and start reading</div><div class="hf"><span class="go">'+PLAY+'Browse courses</span></div></a>';
+  }
+  $('contbody').innerHTML=html; $('cont').classList.remove('hidden');
+  var sv=COURSES.filter(function(c){return P.saved[c.id]}), ch='';
+  sv.slice(0,3).forEach(function(c){
+    var t=cnt(c), d=Prog.doneIn(c.id), pc=t?Math.round(d/t*100):0;
+    ch+='<a class="hr" href="course.html?id='+encodeURIComponent(c.id)+'"><svg class="rg" viewBox="0 0 40 40" role="img" aria-label="'+d+' of '+t+' topics learnt"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100" stroke-dasharray="'+pc+' 100" transform="rotate(-90 20 20)"'+(pc?' stroke-linecap="round"':'')+'/></svg><strong>'+esc(c.name)+'</strong><svg class="ch" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></a>';
+  });
+  if(sv.length>3) ch+='<a class="more" href="courses.html?g=Saved">See all '+sv.length+' saved courses</a>';
+  if(ch){ $('cbody').innerHTML=ch; $('mycourses').classList.remove('hidden'); }
+})();
+$('sf').addEventListener('submit',function(e){ e.preventDefault(); var q=$('q').value.trim(); location.href='search.html'+(q?'?q='+encodeURIComponent(q):''); });
+// Gentle reminder to back up, shown at most once a month.
+(function(){
+  if(!LawLink.loggedIn()) return;
+  var last=LawLink.lastSync(), hasNotes=false;
+  try{ hasNotes=JSON.parse(localStorage.getItem('lawlink-local')||'{}').notes.length>0 }catch(e){}
+  if((Date.now()-last)>30*86400000 && (hasNotes||Prog.get().last)){
+    var el=document.createElement('a'); el.className='crow'; el.href='settings.html'; el.style.marginTop='16px';
+    el.innerHTML='<strong>Back up your notes</strong><span class="m">'+(last?'Last backup was more than a month ago. Tap to sync.':'You have not backed up yet. Tap to sync.')+'</span>';
+    document.querySelector('main').insertBefore(el,document.querySelector('main').firstChild);
+  }
+})();
+})();
+(function(){
+  // A few days before the pass ends, remind the student to renew. Nothing shows while payment is off.
+  if(!LawLink.loggedIn()) return;
+  LawLink.payState().then(function(s){
+    if(!s||!s.on||s.why!=='pass'&&s.why!=='trial') return;
+    var d=Math.ceil((s.until-Date.now())/86400000); if(d>5||d<0) return;
+    var el=document.createElement('a'); el.className='crow'; el.href='subscribe.html'; el.style.marginTop='16px';
+    el.innerHTML='<strong>'+(s.why==='trial'?'Your free access ends':'Your pass ends')+' '+(d<=1?'today or tomorrow':'in '+d+' days')+'</strong><span class="m">Tap to '+(s.why==='trial'?'get a pass':'renew')+' so nothing gets locked.</span>';
+    var m=document.querySelector('main'); m.insertBefore(el,m.firstChild);
+  }).catch(function(){});
+})();
+(function(){
+  // Streak, today's quizzes and topics to revise in one row, with the nearest exam under it.
+  try{
+    var s=Prog.streak(), g=Prog.goal(), t=Prog.today(), ex=Prog.exams().filter(function(x){return x.days>=0})[0];
+    var P=Prog.get(), weak=Object.keys(P.quiz||{}).filter(function(k){return k.indexOf('t:')===0&&!P.quiz[k].p}).length;
+    var h='<div class="hs"><a href="goals.html"><b>'+s+'</b><span>'+(s===1?'day streak':'day streak')+'</span></a><a href="goals.html"><b>'+t+'/'+g+'</b><span>'+(g===1?'quiz today':'quizzes today')+'</span></a><a href="plan.html"'+(weak?' class="gd"':'')+'><b>'+weak+'</b><span>to revise</span></a></div>';
+    if(ex) h+='<a class="hx" href="goals.html"><b>'+esc(ex.n)+'</b> exam '+(ex.days===0?'is today':ex.days===1?'is tomorrow':'in '+ex.days+' days')+'</a>';
+    document.getElementById('strip').innerHTML=h;
+  }catch(e){}
+})();
+(function(){
+  // Announcements from the admin: a count on the bell, and the newest one as a banner until it is closed.
+  var SEEN='lawlink-ann-seen', DIS='lawlink-ann-dis';
+  function num(k){ try{ return Number(localStorage.getItem(k))||0; }catch(e){ return 0; } }
+  var bellN=0; function bell(n){ bellN+=n; var d=document.getElementById('bdot'); d.textContent=bellN>9?'9+':String(bellN); d.hidden=false; }
+  // Replies to my questions in Community (asked together with the other start-up calls, so it costs no extra request).
+  try{ if(LawLink.loggedIn()) LawLink.commNotify(num('lawlink-cm-seen')).then(function(r){ if(r&&(r.n||r.posts)) bell((r.n||0)+(r.posts||0)); }).catch(function(){}); }catch(e){}
+  LawLink.annList().then(function(list){
+    if(!list||!list.length) return;
+    var unread=list.filter(function(a){ return a.id>num(SEEN); }).length;
+    if(unread) bell(unread);
+    var a=list[0];
+    if(Date.now()-a.at>7*86400000||num(DIS)>=a.id) return;
+    var ext=/^https:/i.test(a.link), el=document.createElement('div'); el.className='ann'; el.setAttribute('role','region'); el.setAttribute('aria-label','Announcement');
+    el.innerHTML='<div class="at"><strong>'+esc(a.title)+'</strong><button class="ax" type="button" aria-label="Close announcement">×</button></div><p>'+esc(a.body)+'</p><div class="acts">'+(a.link?'<a class="btn" href="'+esc(a.link)+'"'+(ext?' target="_blank" rel="noopener noreferrer"':'')+'>'+esc(a.linkLabel||'Open')+'</a>':'')+'<a class="btn alt" href="notices.html">All announcements</a></div>';
+    el.querySelector('.ax').onclick=function(){ try{ localStorage.setItem(DIS,String(a.id)); }catch(e){} el.parentNode.removeChild(el); };
+    var m=document.querySelector('main'); m.insertBefore(el,m.firstChild);
+  }).catch(function(){});
+})();
+try{ if(window.LTTour) LTTour.auto(); }catch(e){}
+</script>
+</body>
+</html>

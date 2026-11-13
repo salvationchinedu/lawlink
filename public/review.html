@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Review list</title>
+<link rel="stylesheet" href="style.css">
+<style>.st{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--tint);margin:2px 6px 0 0}.st.ok{color:var(--sage)}.st.warn{color:var(--danger)}</style>
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" id="back" href="courses.html" aria-label="Back to the course" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Review list</h1>
+  </header>
+  <main>
+    <div id="sum"></div>
+    <div class="tabs" id="chips" style="border:0;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
+    <div id="list"></div>
+  </main>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var cid=new URLSearchParams(location.search).get('c'), c=COURSES.filter(function(x){return x.id===cid})[0], filter='todo', notes={}, rv={quiz:{},irac:{}};
+if(!c){ $('list').innerHTML='<div class="soonbox"><h3>Course not found</h3></div>'; return; }
+$('back').href='course.html?id='+encodeURIComponent(c.id);
+function noteSt(id){ var n=notes[id]; if(!n) return {t:'Note: not written',k:'warn',todo:1}; if(n.status!=='complete') return {t:'Note: in progress',k:'warn',todo:1}; return n.verified?{t:'Note: verified',k:'ok'}:{t:'Note: written, not verified',k:'',todo:1}; }
+function quizSt(id){ var q=rv.quiz[id]; if(q==='approved') return {t:'Quiz: approved',k:'ok'}; if(q==='draft') return {t:'Quiz: draft to review',k:'warn',todo:1}; return {t:'Quiz: none',k:'',todo:notes[id]&&notes[id].status==='complete'?1:0}; }
+function render(){
+  var rows=[], tn=0, tc=0, tv=0, qa=0, qd=0;
+  c.parts.forEach(function(pt,pi){ pt.topics.forEach(function(t,i){ var id='t:'+c.id+':'+pi+':'+i, a=noteSt(id), b=quizSt(id); tn++; if(notes[id]&&notes[id].status==='complete') tc++; if(notes[id]&&notes[id].verified) tv++; if(rv.quiz[id]==='approved') qa++; if(rv.quiz[id]==='draft') qd++; rows.push({id:id,pi:pi,i:i,t:t,part:pt.label,a:a,b:b,todo:!!(a.todo||b.todo)}); }); });
+  var cn=noteSt('c:'+c.id);
+  var irac=c.parts.map(function(pt,pi){ var ap=0, fl=0, dr=0; for(var s=0;s<5;s++){ var x=rv.irac['i:'+c.id+':'+pi+':'+s]; if(!x) continue; if(x.status==='approved') ap++; else dr++; if(x.flag) fl++; } return {pi:pi,label:pt.label.replace(/ \(.*\)/,''),ap:ap,dr:dr,fl:fl}; });
+  $('sum').innerHTML='<h2 style="font-size:22px">'+esc(c.name)+'</h2><div class="stats" style="margin-top:8px"><div><strong>'+tc+'/'+tn+'</strong><span>Topic notes written</span></div><div><strong>'+tv+'</strong><span>Notes verified</span></div><div><strong>'+qa+'</strong><span>Quizzes approved</span></div><div><strong>'+qd+'</strong><span>Quizzes waiting for you</span></div></div>';
+  var h='';
+  if(filter==='todo'||filter==='all'){
+    h+='<a class="crow" href="note.html?c='+encodeURIComponent(c.id)+'"><strong>Course note</strong><span class="m"><span class="st '+cn.k+'">'+cn.t+'</span></span></a>';
+    if(c.group!=='General') irac.forEach(function(x){ h+='<a class="crow" href="irac.html?c='+encodeURIComponent(c.id)+'&p='+x.pi+'&admin=1"><strong>IRAC test: '+esc(x.label)+'</strong><span class="m"><span class="st '+(x.ap===5?'ok':'warn')+'">'+x.ap+' of 5 approved</span>'+(x.dr?'<span class="st warn">'+x.dr+' draft</span>':'')+(x.fl?'<span class="st warn">'+x.fl+' flagged by the checker</span>':'')+'</span></a>'; });
+  }
+  var list=rows.filter(function(r){ return filter==='all'||(filter==='todo'&&r.todo)||(filter==='quiz'&&r.b.t==='Quiz: draft to review')||(filter==='nonote'&&r.a.t==='Note: not written'); });
+  var last='';
+  list.forEach(function(r){
+    if(r.part!==last){ last=r.part; h+='<div class="gh">'+esc(r.part)+'</div>'; }
+    h+='<a class="crow" href="note.html?c='+encodeURIComponent(c.id)+'&p='+r.pi+'&i='+r.i+'"><strong>'+(r.i+1)+'. '+esc(r.t)+'</strong><span class="m"><span class="st '+r.a.k+'">'+r.a.t+'</span><span class="st '+r.b.k+'">'+r.b.t+'</span></span></a>';
+  });
+  if(!list.length&&filter!=='all') h+='<div class="empty"><h3>Nothing here</h3><p>Nothing in this view needs you.</p></div>';
+  $('list').innerHTML=h;
+  $('chips').innerHTML=[['todo','Needs attention'],['nonote','Not written'],['quiz','Quizzes to review'],['all','Everything']].map(function(x){return '<button class="chip" data-f="'+x[0]+'" aria-pressed="'+(filter===x[0])+'">'+x[1]+'</button>'}).join('');
+}
+$('chips').onclick=function(e){var b=e.target.closest('.chip'); if(b){filter=b.dataset.f; render();}};
+LawLink.me().then(function(u){ if(u.role!=='admin'){ $('list').innerHTML='<div class="soonbox"><h3>Admins only</h3></div>'; return; }
+  return Promise.all([LawLink.libList(['c:'+c.id,'t:'+c.id+':']),LawLink.reviewSummary(c.id)]).then(function(a){ notes=a[0]; rv=a[1]; render(); });
+}).catch(function(e){ $('list').innerHTML='<div class="soonbox"><p>'+esc(e.message)+'</p></div>'; });
+})();
+</script>
+</body>
+</html>

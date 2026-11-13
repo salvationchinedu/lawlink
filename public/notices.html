@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Announcements</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.an{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.an h2{font-size:18px;margin-bottom:2px}
+.an .t{font-size:13px;color:var(--muted);margin-bottom:8px}
+.an .b{white-space:pre-wrap;overflow-wrap:anywhere}
+.an .btn{margin-top:12px;text-decoration:none}
+.an.new{border-left:4px solid var(--gold)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Announcements</h1>
+  </header>
+  <main id="main"><p class="legend">Loading…</p></main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)}, SEEN='lawlink-ann-seen';
+function ago(ts){ var m=Math.floor((Date.now()-ts)/60000); if(m<1) return 'Just now'; if(m<60) return m+' min ago'; var h=Math.floor(m/60); if(h<24) return h+' hr ago'; var d=Math.floor(h/24); return d===1?'Yesterday':d<30?d+' days ago':new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
+var seen=0; try{ seen=Number(localStorage.getItem(SEEN))||0; }catch(e){}
+var cmEl=null; function showCm(){ if(cmEl&&!cmEl.isConnected) $('main').insertBefore(cmEl,$('main').firstChild); }
+try{ if(LawLink.loggedIn()) LawLink.commNotify(Number(localStorage.getItem('lawlink-cm-seen'))||0).then(function(r){ if(r&&(r.n||r.posts)){ var d=document.createElement('a'); d.className='crow'; d.href='community.html'; var t=[]; if(r.posts) t.push(r.posts+(r.posts===1?' new post':' new posts')); if(r.n) t.push(r.n+(r.n===1?' new reply':' new replies')+' to your questions'); d.innerHTML='<strong>'+t.join(' · ')+' in Community</strong><span class="m">Tap to open Community.</span>'; cmEl=d; showCm(); } }).catch(function(){}); }catch(e){}
+LawLink.annList(true).then(function(list){
+  if(!list.length){ $('main').innerHTML='<div class="empty"><h3>No announcements</h3><p>News from Lex-Tabulā will show up here.</p></div>'; showCm(); return; }
+  $('main').innerHTML=list.map(function(a){
+    var ext=/^https:/i.test(a.link);
+    return '<article class="an'+(a.id>seen?' new':'')+'"><h2>'+esc(a.title)+'</h2><div class="t">'+ago(a.at)+'</div><div class="b">'+esc(a.body)+'</div>'+(a.link?'<a class="btn" href="'+esc(a.link)+'"'+(ext?' target="_blank" rel="noopener noreferrer"':'')+'>'+esc(a.linkLabel||'Open')+'</a>':'')+'</article>';
+  }).join('');
+  try{ localStorage.setItem(SEEN,String(list[0].id)); }catch(e){}
+  showCm();
+}).catch(function(e){ $('main').innerHTML='<div class="empty">'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</div>'; });
+})();
+</script>
+</body>
+</html>

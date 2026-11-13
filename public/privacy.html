@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Privacy and terms</title>
+<link rel="stylesheet" href="style.css">
+<style>.doc h2{font-size:19px;margin:22px 0 6px}.doc p,.doc li{font-size:15px;line-height:1.6;margin:6px 0}.doc ul{padding-left:20px}</style>
+<script src="ui.js"></script>
+<script src="legal-default.js"></script>
+</head>
+<body class="plain">
+<div class="app">
+  <header class="top">
+    <a class="ib" href="javascript:history.length>1?history.back():location.href='home.html'" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Privacy and terms</h1>
+  </header>
+  <main class="doc">
+    <p class="legend" id="upd" style="margin-top:4px">Last updated: November 2026</p>
+    <div id="body"></div>
+
+    <div class="btns" style="margin-top:22px"><a class="btn alt" href="settings.html" style="text-decoration:none">Settings</a> <a class="btn alt" href="home.html" style="text-decoration:none">Home</a></div>
+  </main>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var K='lawlink-legal', body=document.getElementById('body'), upd=document.getElementById('upd');
+function show(o){
+  var t=o&&o.text?o.text:window.LEGAL_DEFAULT;
+  body.innerHTML=window.legalHtml(t);
+  upd.textContent='Last updated: '+(o&&o.text&&o.at?new Date(o.at).toLocaleDateString(undefined,{month:'long',year:'numeric'}):'November 2026');
+}
+var c=null; try{ c=JSON.parse(localStorage.getItem(K)); }catch(e){}
+show(c);
+if(window.LawLink&&LawLink.legalGet) LawLink.legalGet().then(function(o){ try{ localStorage.setItem(K,JSON.stringify(o)); }catch(e){} show(o); }).catch(function(){});
+})();
+</script>
+</body>
+</html>

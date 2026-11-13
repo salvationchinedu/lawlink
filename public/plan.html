@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Study plan</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="progress.html" aria-label="Back to my progress" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Study plan</h1>
+  </header>
+  <main id="main"></main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()){ location.replace('login.html'); return; }
+var DAY=86400000, REVISE_AFTER=21*DAY;
+var P=Prog.get(), QZ=P.quiz||{}, IR=P.irac||{}, QRS={};
+function course(id){ return COURSES.filter(function(x){return x.id===id})[0]; }
+function topicOf(k){ var s=k.split(':'), c=course(s[1]); if(!c) return null; var pt=c.parts[+s[2]]; var t=pt&&pt.topics[+s[3]]; return t?{c:c,p:+s[2],i:+s[3],t:t}:null; }
+function link(k){ var x=topicOf(k); return x?{x:x,href:'note.html?c='+encodeURIComponent(x.c.id)+'&p='+x.p+'&i='+x.i,quiz:'quiz.html?c='+encodeURIComponent(x.c.id)+'&p='+x.p+'&i='+x.i}:null; }
+function ago(t){ var d=Math.floor((Date.now()-t)/DAY); return d<1?'today':d===1?'yesterday':d+' days ago'; }
+function row(title,sub,href){ return '<a class="crow" href="'+href+'"><strong>'+esc(title)+'</strong><span class="m">'+esc(sub)+'</span></a>'; }
+function draw(iracReady){
+  var h='', started=[];
+  COURSES.forEach(function(c){ var d=Prog.doneIn(c.id); if(d>0||P.saved[c.id]||(P.last&&P.last.c===c.id)) started.push(c); });
+  started.sort(function(a,b){ return (P.last&&P.last.c===b.id)-(P.last&&P.last.c===a.id)||Prog.doneIn(b.id)-Prog.doneIn(a.id); });
+  // 1. Next up
+  var next=[];
+  started.slice(0,4).forEach(function(c){
+    var cs=Prog.courseState(c,iracReady[c.id]||{},QRS[c.id]||{});
+    if(cs.complete){ return; }
+    var done=false;
+    cs.parts.forEach(function(pp){
+      if(done) return;
+      if(pp.d<pp.n){
+        for(var i=0;i<c.parts[pp.pi].topics.length;i++){ if(QRS[c.id]&&QRS[c.id]['t:'+c.id+':'+pp.pi+':'+i]&&!P.done['t:'+c.id+':'+pp.pi+':'+i]){ next.push(row(c.name+': '+c.parts[pp.pi].topics[i],(pp.label.replace(/ \(.*\)/,''))+' · topic '+(i+1)+' of '+pp.n+' · read it, then take the quiz','note.html?c='+encodeURIComponent(c.id)+'&p='+pp.pi+'&i='+i)); break; }
+        }
+        done=true;
+      }else if(pp.has&&!pp.passed){ next.push(row(c.name+': IRAC test',pp.label.replace(/ \(.*\)/,'')+' · unlocked, pass mark 80%','irac.html?c='+encodeURIComponent(c.id)+'&p='+pp.pi)); done=true; }
+    });
+  });
+  h+='<div class="gh">Next up<small>'+next.length+'</small></div>'+(next.length?next.join(''):'<div class="empty"><h3>Nothing started yet</h3><p>Open a course, read a topic and take its quiz. Your plan appears here.</p><a class="btn" href="courses.html">Browse courses</a></div>');
+  // 2. Weak topics: attempted, not yet passed
+  var weak=Object.keys(QZ).filter(function(k){return k.indexOf('t:')===0&&!QZ[k].p&&link(k)}).sort(function(a,b){return QZ[a].b-QZ[b].b});
+  if(weak.length) h+='<div class="gh">Not passed yet<small>'+weak.length+'</small></div>'+weak.slice(0,8).map(function(k){ var l=link(k); return row(l.x.t,l.x.c.name+' · best '+QZ[k].b+'% · need 80% · tap to read the note',l.href); }).join('');
+  Object.keys(IR).filter(function(k){return !IR[k].p}).forEach(function(k){ var s=k.split(':'), c=course(s[0]); if(!c||!c.parts[+s[1]]) return; h+=row(c.name+': IRAC test',c.parts[+s[1]].label.replace(/ \(.*\)/,'')+' · best '+IR[k].b+'% · need 80%','irac.html?c='+encodeURIComponent(c.id)+'&p='+s[1]); });
+  // 3. Revision due
+  var rev=Object.keys(QZ).filter(function(k){return k.indexOf('t:')===0&&QZ[k].p&&Date.now()-QZ[k].t>REVISE_AFTER&&link(k)}).sort(function(a,b){return QZ[a].t-QZ[b].t});
+  h+='<div class="gh">Time to revise<small>'+rev.length+'</small></div>'+(rev.length?rev.slice(0,10).map(function(k){ var l=link(k); return row(l.x.t,l.x.c.name+' · passed '+ago(QZ[k].t)+' · retake the quiz to refresh it',l.quiz); }).join(''):'<div class="legend">Topics you passed come back here after 3 weeks, so you remember them.</div>');
+  // 4. Saved but not started
+  var fresh=COURSES.filter(function(c){return P.saved[c.id]&&Prog.doneIn(c.id)===0&&c.parts.length});
+  if(fresh.length) h+='<div class="gh">Saved, not started<small>'+fresh.length+'</small></div>'+fresh.slice(0,6).map(function(c){ return row(c.name,'Start with topic 1','note.html?c='+encodeURIComponent(c.id)+'&p=0&i=0'); }).join('');
+  $('main').innerHTML=h;
+}
+draw({});
+var ids=[]; COURSES.forEach(function(c){ if(Prog.doneIn(c.id)>0) ids.push(c.id); });
+Promise.all(ids.slice(0,6).map(function(id){ return LawLink.quizReady(id).then(function(q){ QRS[id]=q||{}; }).catch(function(){}).then(function(){ return LawLink.iracReady(id); }).then(function(m){return [id,m]}).catch(function(){return [id,{}]}); })).then(function(a){ var o={}; a.forEach(function(x){o[x[0]]=x[1]}); draw(o); });
+})();
+</script>
+</body>
+</html>

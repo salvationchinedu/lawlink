@@ -1,0 +1,38 @@
+{
+  // One Cloudflare project: the website (public folder) and the API (src/index.js) share one address.
+  "name": "lextabula",
+  "main": "src/index.js",
+  "compatibility_date": "2025-01-01",
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": ["/", "/api", "/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lextabula-db",
+      // Paste the Database ID from Cloudflare: Storage and databases > D1 SQL database > lextabula-db. Keep the quotes.
+      "database_id": "8c637056-bee6-433a-9332-d70286e1010e"
+    }
+  ],
+
+  // The timer: every minute it sends the daily study reminders and pass warnings that are due, and finishes any announcement still being sent.
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+
+  "vars": {
+    "GOOGLE_CLIENT_ID": "744868327622-ekqpnaelfic62m4dto9g3u7al0lqvfkf.apps.googleusercontent.com",
+    "ADMIN_EMAILS": "salvation4chinedu@gmail.com",
+    "ALLOWED_ORIGINS": "",
+    "GEMINI_MODEL": "gemini-3.6-flash",
+    "COMMUNITY_ENABLED": "true",
+    // How many phones one notification run may reach. 6 is safe on the free Cloudflare plan (it allows 10 ms of work per run). After you move to the paid plan this can be raised (for example 400).
+    "PUSH_CHUNK": "6"
+  }
+  // Secrets (SESSION_SECRET and GEMINI_KEY) are NOT stored here. You add them in the Cloudflare dashboard.
+}

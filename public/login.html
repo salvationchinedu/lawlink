@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Sign in</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+</head>
+<body class="plain">
+<style>
+.si{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 44px) 24px calc(env(safe-area-inset-bottom,0px) + 22px);background:var(--bg);color:var(--text);max-width:520px;margin:0 auto}
+.si .wm2{display:flex;align-items:center;gap:10px;font:700 30px Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;letter-spacing:-.4px;color:var(--navy)}
+.si .wm2 svg{width:26px;height:30px;flex:none;stroke:none}
+.si .wm2 i{font-style:normal;color:var(--gold)}
+.si .sihero{position:relative;flex:0 1 330px;width:100%;min-height:150px;margin-top:22px;display:grid;place-items:center}
+.si .sihero:before{content:"";position:absolute;height:92%;aspect-ratio:1;max-width:100%;border-radius:50%;background:var(--tint)}
+.si .sihero svg{position:relative;height:74%;width:auto;stroke:none}
+.si .hl{font:500 clamp(28px,8.6vw,34px)/1.15 "Source Serif 4","Times New Roman",Times,serif;letter-spacing:-.5px;text-align:center;margin-top:22px}
+.si .sub{text-align:center;color:var(--muted);font-size:16px;line-height:1.5;margin-top:10px;max-width:340px}
+.si .grow{flex:1 1 20px}
+.si .bt{width:100%;margin-top:18px}
+.si #gbtn{min-height:52px;width:100%}
+.si .gph{width:100%;height:52px;font-size:16px;gap:12px}
+.si .gph svg{width:20px;height:20px}
+.si .msg{text-align:center}
+.si .fine{font-size:13.5px;line-height:1.45;color:var(--muted);text-align:center;margin-top:16px}
+@media (max-height:700px){.si{padding-top:calc(env(safe-area-inset-top,0px) + 24px)}.si .sihero{margin-top:12px}.si .hl{margin-top:14px}}
+</style>
+<main class="si">
+  <div class="wm2"><svg viewBox="0 0 28 32" aria-hidden="true"><path d="M2 30V14a12 12 0 0 1 24 0v16z" fill="currentColor"/><path d="M8 14h4M8 20h4M8 26h4M15 14h5M15 20h5M15 26h5" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span>Lex<i>-</i>Tabul<i>ā</i></span></div>
+  <div class="sihero" aria-hidden="true">
+    <svg viewBox="0 0 200 250">
+      <path d="M22 240V100C22 40 56 8 100 8s78 32 78 92v140z" fill="var(--navy)"/>
+      <path d="M22 240h156" stroke="var(--gold)" stroke-width="6" stroke-linecap="round"/>
+      <g stroke="#E6C877" stroke-width="6" stroke-linecap="round"><path d="M58 98h30M58 130h30M58 162h30M104 98h38M104 130h26M104 162h34"/></g>
+      <path d="M58 194h54" stroke="rgba(255,255,255,.28)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M150 0h22v78l-11-14-11 14z" fill="var(--gold)"/>
+    </svg>
+  </div>
+  <div class="hl" role="heading" aria-level="1">Learn it. Cite it.<br>Pass it.</div>
+  <p class="sub">Notes, quizzes and statutes for law students in Nigerian universities.</p>
+  <div class="grow"></div>
+  <div class="bt">
+    <div id="gbtn" style="display:flex;justify-content:center"><button type="button" class="gph" id="gph" aria-label="Continue with Google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.2C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg><span>Continue with Google</span></button></div>
+    <div class="msg err" id="err" role="alert" style="margin-top:12px"></div>
+    <p class="fine">By continuing, you agree to the <a href="privacy.html">Terms and Privacy Policy</a>.</p>
+  </div>
+</main>
+
+<script src="api.js"></script>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  try{ localStorage.setItem('lawlink-welcome','1'); }catch(e){} // anyone who reaches sign-in has been through the welcome
+  var next=new URLSearchParams(location.search).get('next');
+  if(!/^[a-z]+\.html$/.test(next||'')) next='home.html';
+
+  if(LawLink.loggedIn()){ location.replace(next); return; }
+
+  function configured(){ return !PREVIEW && GOOGLE_CLIENT_ID.indexOf('PASTE')!==0; }
+  if(!configured()){
+    $('gbtn').innerHTML='';
+    $('err').textContent='Sign-in is not set up yet. You can still use Lex-Tabulā without an account.';
+    return;
+  }
+
+  async function onCredential(resp){
+    $('err').textContent='';
+    $('gbtn').style.opacity='.5'; $('gbtn').style.pointerEvents='none';
+    try{ await LawLink.googleLogin(resp.credential); location.replace(next); }
+    catch(e){
+      $('gbtn').style.opacity='1'; $('gbtn').style.pointerEvents='auto';
+      $('err').textContent=(e instanceof TypeError)?'Could not sign in. Check your data and try again.':e.message;
+    }
+  }
+  function boot(){
+    var out=false; try{ out=!!localStorage.getItem('lawlink-signedout'); }catch(e){}
+    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID, callback:onCredential, auto_select:!out, cancel_on_tap_outside:false});
+    $('gbtn').innerHTML=''; // the real Google button replaces the waiting button
+    google.accounts.id.renderButton($('gbtn'),{theme:'outline',size:'large',text:'continue_with',shape:'pill',width:Math.min(400,Math.round($('gbtn').getBoundingClientRect().width)||320)});
+    if(!out) try{ google.accounts.id.prompt(); }catch(e){}
+  }
+  // Until Google's script has loaded (for example with no network) a "Continue with Google" button is shown and the real one takes its place once it is ready.
+  var loading=false, ready=false;
+  function load(){
+    if(ready||loading) return;
+    loading=true;
+    var s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client'; s.async=true; s.defer=true;
+    s.onload=function(){ loading=false; ready=true; $('err').textContent=''; boot(); };
+    s.onerror=function(){ loading=false; s.remove(); $('err').textContent=navigator.onLine===false?'No network. Connect to the internet and sign-in will be ready.':'Could not reach Google. Check your data and tap Continue with Google again.'; };
+    document.head.appendChild(s);
+  }
+  $('gbtn').addEventListener('click',function(e){ if(!ready&&e.target.closest('.gph')){ $('err').textContent=navigator.onLine===false?'No network. Connect to the internet and sign-in will be ready.':'Getting Google ready…'; load(); } });
+  window.addEventListener('online',function(){ $('err').textContent=''; load(); });
+  load();
+})();
+</script>
+</body>
+</html>

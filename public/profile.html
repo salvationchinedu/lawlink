@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – My profile</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.av2{width:96px;height:96px;border-radius:50%;background:var(--navy);color:var(--on-navy);display:grid;place-items:center;font:700 42px Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:8px auto 4px}
+.fld{display:block;margin:14px 0 4px;font-weight:600}
+.inp{width:100%;padding:12px;font:inherit;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.inp[readonly]{background:var(--tint);color:var(--muted)}
+.hint{color:var(--muted);font-size:13px;margin-top:4px}
+.pick{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-top:8px}
+.pick label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.pick label:last-child{border-bottom:0}
+.pick input{margin-top:3px;width:18px;height:18px;flex:none}
+.chosen{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chosen span{background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px}
+.savebar{position:sticky;bottom:calc(70px + env(safe-area-inset-bottom,0px));padding:10px 0;background:linear-gradient(transparent,var(--bg) 40%)}
+.savebar .btn{width:100%}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="settings.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>My profile</h1>
+  </header>
+  <main>
+    <div class="av2" id="av" aria-hidden="true">?</div>
+    <div id="body" class="hint" style="text-align:center">Loading…</div>
+  </main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script src="courses-data.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()||!LawLink.loggedIn()){ location.replace('login.html?next=profile.html'); return; }
+var UNIS=window.LAW_UNIS;
+var P=null, picked=[];
+function esc2(s){return esc(s)}
+function nameLine(){
+  if(P.nameNext&&P.nameNext>Date.now()){ var d=Math.ceil((P.nameNext-Date.now())/86400000); return 'You can change your name again in '+d+' day'+(d===1?'':'s')+'. This is the name other students see in Community.'; }
+  return 'You can change your name once every 14 days. This is the name other students see in Community.';
+}
+function chosenHtml(){
+  if(!picked.length) return '<p class="hint">None chosen. All courses still show in the normal list.</p>';
+  var by={}; COURSES.forEach(function(c){by[c.id]=c.name});
+  return '<div class="chosen">'+picked.map(function(i){return '<span>'+esc(by[i]||i)+'</span>'}).join('')+'</div>';
+}
+function draw(){
+  var inList=UNIS.indexOf(P.uni)>-1, other=P.uni&&!inList;
+  var opts='<option value="">Choose your university</option>'+UNIS.map(function(u){return '<option'+((u===P.uni||(other&&u==='Other'))?' selected':'')+'>'+esc(u)+'</option>'}).join('');
+  $('av').textContent=String(P.name||'?').charAt(0).toUpperCase();
+  var locked=P.nameNext&&P.nameNext>Date.now();
+  $('body').className=''; $('body').style.textAlign='left';
+  $('body').innerHTML=
+   '<label class="fld" for="nm">Name</label><input class="inp" id="nm" maxlength="60" autocomplete="name" value="'+esc(P.name)+'"'+(locked?' readonly':'')+'><div class="hint" id="nmh">'+esc(nameLine())+'</div>'+
+   '<label class="fld" for="em">Email address</label><input class="inp" id="em" readonly value="'+esc(P.email)+'"><div class="hint">From your Google sign-in. It cannot be changed here.</div>'+
+   '<label class="fld" for="ph">Phone number (optional)</label><input class="inp" id="ph" type="tel" maxlength="20" autocomplete="tel" placeholder="e.g. 0812 345 6789" value="'+esc(P.phone)+'"><div class="hint">Private. Only the Lex-Tabulā admin can see it.</div>'+
+   '<label class="fld" for="un">University</label><select class="inp" id="un">'+opts+'</select>'+
+   '<input class="inp'+(other?'':' hidden')+'" id="uo" maxlength="80" placeholder="Type your university" style="margin-top:8px" value="'+esc(other?P.uni:'')+'">'+
+   '<label class="fld" for="yr">Year of call or expected graduation (optional)</label><input class="inp" id="yr" inputmode="numeric" maxlength="4" placeholder="e.g. 2027" value="'+esc(P.yr)+'">'+
+   '<label class="fld">Courses I am taking this semester (optional)</label><div class="hint" style="margin-top:0">These show first in your course list. Every other course stays open to you.</div><div id="ch">'+chosenHtml()+'</div>'+
+   '<button class="btn alt" id="pk" style="margin-top:10px">Choose courses</button><div id="pkw" class="hidden"><input class="inp" id="pq" type="search" placeholder="Search courses" style="margin-top:8px"><div class="pick" id="pl"></div></div>'+
+   '<div class="msg" id="msg" role="status" style="margin-top:12px"></div>'+
+   '<div class="savebar"><button class="btn" id="save">Save</button></div>'+
+   '<div id="passline"></div><div class="btns" style="margin-top:6px"><a class="btn alt" href="progress.html" style="text-decoration:none">My progress</a><a class="btn alt" href="performance.html" style="text-decoration:none">Performance</a><a class="btn alt" href="settings.html" style="text-decoration:none">Settings and privacy</a></div>';
+  $('un').onchange=function(){ $('uo').classList.toggle('hidden',$('un').value!=='Other'); };
+  $('pk').onclick=function(){ var w=$('pkw'); w.classList.toggle('hidden'); $('pk').textContent=w.classList.contains('hidden')?'Choose courses':'Done choosing'; if(!w.classList.contains('hidden')) list(); };
+  $('pq').oninput=list;
+  $('pl').onchange=function(e){ var i=e.target.value; if(e.target.checked){ if(picked.indexOf(i)<0){ if(picked.length>=30){ e.target.checked=false; say('You can choose up to 30 courses.',1); return; } picked.push(i);} } else picked=picked.filter(function(x){return x!==i}); $('ch').innerHTML=chosenHtml(); };
+  $('save').onclick=save;
+  LawLink.payState().then(function(s){ if(!s.on||s.why==='admin') return; var t=s.why==='pass'?'Your pass has '+Math.ceil((s.until-Date.now())/86400000)+' day(s) left.':s.why==='trial'?'Free access for '+Math.ceil((s.until-Date.now())/86400000)+' more day(s).':'You do not have a pass.'; $('passline').innerHTML='<a class="crow" href="subscribe.html" style="margin-top:14px"><strong>Lex-Tabulā pass</strong><span class="m">'+t+' Tap to manage.</span></a>'; }).catch(function(){});
+}
+function list(){
+  var q=$('pq').value.trim().toLowerCase();
+  $('pl').innerHTML=COURSES.filter(function(c){return !q||c.name.toLowerCase().indexOf(q)>-1||c.aliases.some(function(a){return a.toLowerCase().indexOf(q)>-1})}).sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(c){
+    return '<label><input type="checkbox" value="'+esc(c.id)+'"'+(picked.indexOf(c.id)>-1?' checked':'')+'><span>'+esc(c.name)+'</span></label>';
+  }).join('')||'<p class="hint" style="padding:12px">No courses match.</p>';
+}
+function say(t,err){ var m=$('msg'); m.className='msg'+(err?' err':''); m.textContent=t; }
+async function save(){
+  var b=$('save'), uni=$('un').value==='Other'?$('uo').value.trim():$('un').value;
+  if($('un').value==='Other'&&!uni){ say('Type your university, or choose another option.',1); return; }
+  b.disabled=true; b.textContent='Saving…'; say('');
+  try{
+    var body={phone:$('ph').value,uni:uni,yr:$('yr').value,sem:picked};
+    if(!$('nm').readOnly) body.name=$('nm').value;
+    var d=await LawLink.saveProfile(body); P=d.profile; picked=P.sem.slice(); draw(); say('Saved.');
+  }catch(e){ say((e instanceof TypeError)?'Could not save. Check your data and try again.':e.message,1); }
+  finally{ var s=$('save'); if(s){ s.disabled=false; s.textContent='Save'; } }
+}
+LawLink.getProfile().then(function(d){ P=d.profile; picked=P.sem.slice(); try{localStorage.setItem('lawlink-sem',JSON.stringify(picked))}catch(e){} draw(); })
+ .catch(function(e){ if(/log in|expired/i.test(e.message)){ setToken(null); location.replace('login.html?next=profile.html'); return; } $('body').textContent=(e instanceof TypeError)?'Could not load your profile. Check your data and try again.':e.message; });
+})();
+</script>
+</body>
+</html>

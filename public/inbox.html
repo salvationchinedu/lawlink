@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LawLink – Admin inbox</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Lex-Tabulā – Admin inbox</title>
 <link rel="stylesheet" href="style.css">
 <script src="ui.js"></script>
 </head>
@@ -38,6 +37,7 @@ function href(it){
   if(id==='request:law') return {url:'authorities.html?add='+encodeURIComponent(it.message), label:'Add this law'};
   if(id.indexOf('auth:')===0) return {url:'authority.html?id='+encodeURIComponent(id), label:'Open'};
   var m=id.split(':');
+  if(m[0]==='i'&&m.length>=3) return {url:'irac.html?c='+encodeURIComponent(m[1])+'&p='+m[2]+'&admin=1', label:'Open the IRAC test'};
   if(m[0]==='t'&&m.length>=4) return {url:'note.html?c='+encodeURIComponent(m[1])+'&p='+m[2]+'&i='+m[3], label:'Open the note'};
   if(m.length>=2&&(m[0]==='c'||m[0]==='s')) return {url:'note.html?c='+encodeURIComponent(m[1]), label:'Open the note'};
   if(id&&id.indexOf(':')<0) return {url:'case.html?id='+encodeURIComponent(id), label:'Open the case'};
@@ -63,7 +63,7 @@ $('list').onclick=async function(e){
   catch(x){ b.disabled=false; $('count').textContent=x.message; }
 };
 LawLink.me().then(function(u){
-  if(u.role!=='admin'){ $('count').textContent=''; $('list').innerHTML='<div class="empty"><h3>Admins only</h3><p>This page is for the LawLink admin.</p></div>'; return; }
+  if(u.role!=='admin'){ $('count').textContent=''; $('list').innerHTML='<div class="empty"><h3>Admins only</h3><p>This page is for the Lex-Tabulā admin.</p></div>'; return; }
   return LawLink.inbox().then(function(l){ items=l||[]; render(); });
 }).catch(function(e){ $('count').textContent=(e instanceof TypeError)?'Offline. Could not load.':e.message; });
 })();

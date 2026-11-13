@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Pass</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.pcard h2{font-size:19px;margin-bottom:6px}
+.big{font:700 28px Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+.inp{width:100%;padding:12px;font:inherit;font-size:18px;letter-spacing:1px;text-transform:uppercase;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.hint{color:var(--muted);font-size:14px;margin-top:6px}
+ul.free{margin:8px 0 0 18px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="home.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Lex-Tabulā pass</h1>
+  </header>
+  <main id="main"><p class="hint">Loading…</p></main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!LawLink.loggedIn()){ location.replace('login.html?next=subscribe.html'); return; }
+function dt(ts){ return new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'}); }
+function left(ts){ var d=Math.ceil((ts-Date.now())/86400000); return d<=1?'less than a day':d+' days'; }
+function draw(s){
+  var h='';
+  if(!s.on){ $('main').innerHTML='<div class="pcard"><h2>Everything is open</h2><p>There is nothing to buy right now. All notes, quizzes and tests are available to you.</p><div class="btns" style="margin-top:12px"><a class="btn" href="courses.html" style="text-decoration:none">Browse courses</a></div></div>'; return; }
+  if(s.why==='admin') h+='<div class="pcard"><h2>You are the admin</h2><p>You can open everything without a pass.</p></div>';
+  else if(s.why==='pass') h+='<div class="pcard"><h2>Your pass is active</h2><div class="big">'+left(s.until)+' left</div><p class="hint">Ends on '+dt(s.until)+'. A new code adds '+s.days+' days on top of what you have left.</p></div>';
+  else if(s.why==='trial') h+='<div class="pcard"><h2>Free access for now</h2><div class="big">'+left(s.until)+' left</div><p class="hint">Everything is open to you until '+dt(s.until)+'. After that you need a pass.</p></div>';
+  else h+='<div class="pcard"><h2>No active pass</h2><p>'+(s.until?'Your last pass ended on '+dt(s.until)+'. ':'')+'The first topic of every course is free, with its quiz and one IRAC test. The pass opens all the other notes, quizzes and tests.</p></div>';
+  if(s.why!=='admin'||s.card){
+    h+='<div class="pcard"><h2>Get a pass</h2>'+(s.card?'<p class="hint" style="margin-top:0">Pay by card, bank transfer or USSD. Your pass switches on as soon as the payment is confirmed.</p>':'')+(s.price>0?'<div class="big">₦'+Number(s.price).toLocaleString()+' <span class="hint" style="font-size:16px;font-weight:400">for '+s.days+' days</span></div>':'<p>One pass lasts '+s.days+' days.</p>')+(s.help?'<p style="margin-top:8px">'+esc(s.help)+'</p>':'')+(s.card?'<div class="btns" style="margin-top:12px"><button class="btn" id="pay" style="width:100%">Pay ₦'+Number(s.price).toLocaleString()+' now</button></div><div class="msg" id="pmsg" role="status" style="margin-top:8px"></div>':'')+'</div>'+
+      '<div class="pcard"><h2>Have a code?</h2><label for="code" class="hint" style="display:block;margin:0 0 6px">Type it exactly as it was given to you.</label><input class="inp" id="code" maxlength="14" autocomplete="off" autocapitalize="characters" placeholder="XXXXX-XXXXX"><div class="btns" style="margin-top:12px"><button class="btn" id="go">Use this code</button></div><div class="msg" id="msg" role="status" style="margin-top:10px"></div></div>';
+  }
+  $('main').innerHTML=h;
+  if($('go')) $('go').onclick=redeem;
+  if($('pay')) $('pay').onclick=startPay;
+  if($('code')) $('code').onkeydown=function(e){ if(e.key==='Enter') redeem(); };
+}
+async function startPay(){
+  var b=$('pay'), m=$('pmsg'); b.disabled=true; m.className='msg'; m.textContent='Opening the payment page…';
+  try{ var d=await LawLink.payStart(); location.href=d.url; }
+  catch(e){ m.className='msg err'; m.textContent=(e instanceof TypeError)?'Could not start the payment. Check your data and try again.':e.message; b.disabled=false; }
+}
+async function confirmPay(ref,tries){
+  $('main').innerHTML='<div class="pcard"><h2>Confirming your payment…</h2><p class="hint">Please wait. Do not close this page.</p></div>';
+  var d=null;
+  for(var i=0;i<(tries||6);i++){
+    try{ d=await LawLink.payVerify(ref); if(d.status==='paid') break; if(d.status==='failed') break; }catch(e){ if(!(e instanceof TypeError)){ $('main').innerHTML='<div class="pcard"><h2>Could not check the payment</h2><p>'+esc(e.message)+'</p></div>'; return; } }
+    await new Promise(function(ok){setTimeout(ok,3000)});
+  }
+  try{ history.replaceState(null,'','subscribe.html'); }catch(e){}
+  if(d&&d.status==='paid'){ draw(d.state); $('main').insertAdjacentHTML('afterbegin','<div class="msg" role="status" style="margin:8px 0;color:var(--sage);font-weight:600">Payment received. Everything is now open to you.</div>'); return; }
+  if(d&&d.status==='failed'){ $('main').innerHTML='<div class="pcard"><h2>Payment not completed</h2><p>Paystack reported that this payment did not go through. You have not been charged for a pass.</p><div class="btns" style="margin-top:12px"><a class="btn" href="subscribe.html" style="text-decoration:none">Try again</a></div></div>'; return; }
+  $('main').innerHTML='<div class="pcard"><h2>Still waiting for confirmation</h2><p>We have not heard back from Paystack yet. If money left your account, your pass will switch on by itself within a few minutes. You can also check again now.</p><div class="btns" style="margin-top:12px"><button class="btn" id="again">Check again</button><a class="btn alt" href="subscribe.html" style="text-decoration:none">Back</a></div></div>';
+  $('again').onclick=function(){ confirmPay(ref,3); };
+}
+async function redeem(){
+  var b=$('go'), m=$('msg'), v=$('code').value.trim();
+  if(!v){ m.className='msg err'; m.textContent='Type your code first.'; return; }
+  b.disabled=true; m.className='msg'; m.textContent='Checking…';
+  try{ var s=await LawLink.redeem(v); draw(s); $('main').insertAdjacentHTML('afterbegin','<div class="msg" role="status" style="margin:8px 0;color:var(--sage);font-weight:600">Code accepted. Everything is now open to you.</div>'); }
+  catch(e){ m.className='msg err'; m.textContent=(e instanceof TypeError)?'Could not check the code. Check your data and try again.':e.message; b.disabled=false; }
+}
+var qs=new URLSearchParams(location.search), pref=qs.get('reference')||qs.get('trxref');
+if(pref&&/^[\w.=-]{5,60}$/.test(pref)) confirmPay(pref,6);
+else LawLink.payState(true).then(draw).catch(function(e){ $('main').innerHTML='<p class="hint">'+esc((e instanceof TypeError)?'Could not load. Check your data and try again.':e.message)+'</p>'; });
+})();
+</script>
+</body>
+</html>

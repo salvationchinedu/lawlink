@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lex-Tabulā – Payments</title>
+<link rel="stylesheet" href="style.css">
+<script src="ui.js"></script>
+<style>
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.pcard h2{font-size:18px;margin-bottom:6px}
+.fld{display:block;margin:12px 0 4px;font-weight:600}
+.inp{width:100%;padding:12px;font:inherit;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.hint{color:var(--muted);font-size:14px;margin-top:4px}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pill2{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:14px}
+.on{background:rgba(107,158,127,.25)}.off{background:rgba(169,68,66,.18)}
+.st{display:flex;gap:10px;margin-top:8px}.st div{flex:1;background:var(--tint);border-radius:10px;padding:10px;text-align:center}.st b{display:block;font:700 22px Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}.st span{font-size:13px;color:var(--muted)}
+textarea.inp{font-family:ui-monospace,Menlo,monospace;font-size:14px;min-height:140px}
+.brow{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="ib" href="settings.html" aria-label="Back" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1>Payments</h1>
+  </header>
+  <main id="main"><p class="hint">Loading…</p></main>
+  <nav class="nav" aria-label="Main"><div>
+    <a href="home.html"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>Home</a>
+    <a href="courses.html"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/></svg>Courses</a>
+    <a href="search.html"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search</a>
+    <a href="notes.html"><svg viewBox="0 0 24 24"><path d="M5 20l4-1 10-10-3-3L6 16z"/></svg>Notes</a>
+    <a href="community.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Community</a>
+  </div></nav>
+</div>
+<script src="api.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+if(!getToken()||!LawLink.loggedIn()){ location.replace('login.html?next=payments.html'); return; }
+var D=null;
+function say(id,t,err){ var m=$(id); if(m){ m.className='msg'+(err?' err':''); m.textContent=t; } }
+function dt(ts){ return ts?new Date(ts).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):''; }
+function csv(name,lines){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500); }
+function cell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+function draw(){
+  var c=D.conf;
+  $('main').innerHTML=
+  '<div class="pcard"><div class="sw"><div><h2>Payment is <span class="pill2 '+(c.on?'on':'off')+'">'+(c.on?'ON':'OFF')+'</span></h2><p class="hint" style="margin-top:0">'+(c.on?'Students need a pass for everything except the free preview.':'Everyone has full access. Students see nothing about payment.')+'</p></div><button class="btn '+(c.on?'ghost':'')+'" id="tog" style="flex:none">'+(c.on?'Switch off':'Switch on')+'</button></div>'+
+  (c.on&&c.enabledAt?'<p class="hint">Switched on first on '+dt(c.enabledAt)+'. Students who joined before then had '+c.trial+' free days from that date.</p>':'')+'<div class="msg" id="m1" role="status"></div></div>'+
+  '<div class="pcard"><h2>Card payments</h2><p style="margin:0">'+(D.card.set?'Paystack is connected in <b>'+(D.card.mode==='live'?'LIVE':D.card.mode==='test'?'TEST':'unknown')+'</b> mode.'+(D.card.mode==='test'?' No real money moves in test mode.':''):'Paystack is not connected yet, so students can only use codes.')+'</p><div class="st"><div><b>'+D.paid+'</b><span>Paid</span></div><div><b>₦'+Number(D.revenue).toLocaleString()+'</b><span>Received</span></div></div><div class="hint">Webhook address to give Paystack: <b id="whu"></b></div></div>'+
+  '<div class="pcard"><div class="st"><div><b>'+D.active+'</b><span>Active passes</span></div><div><b>'+D.codesUnused+'</b><span>Unused codes</span></div><div><b>'+D.codesUsed+'</b><span>Codes used</span></div></div></div>'+
+  '<div class="pcard"><h2>Settings</h2><label class="fld" for="pr">Price for 30 days (naira)</label><input class="inp" id="pr" inputmode="numeric" value="'+c.price+'"><div class="hint">Shown to students on the pass page. Codes always give 30 days.</div>'+
+  '<label class="fld" for="tr">Free days for students who joined before payment started</label><input class="inp" id="tr" inputmode="numeric" value="'+c.trial+'"><div class="hint">Counted from the day you first switch payment on.</div>'+
+  '<label class="fld" for="hp">How to get a code (shown to students)</label><textarea class="inp" id="hp" maxlength="300" style="min-height:80px;font-family:inherit;font-size:16px" placeholder="e.g. Buy a code from your campus rep or WhatsApp 0801 234 5678">'+esc(c.help)+'</textarea>'+
+  '<div class="btns" style="margin-top:12px"><button class="btn" id="sv">Save settings</button></div><div class="msg" id="m2" role="status"></div></div>'+
+  '<div class="pcard"><h2>Make codes</h2><p class="hint" style="margin-top:0">Each code works once and gives 30 days. You can sell them yourself.</p><label class="fld" for="cn">How many (1 to 500)</label><input class="inp" id="cn" inputmode="numeric" value="50"><label class="fld" for="cl">Name for this batch</label><input class="inp" id="cl" maxlength="40" placeholder="e.g. UNN rep, November"><div class="btns" style="margin-top:12px"><button class="btn" id="mk">Make codes</button></div><div class="msg" id="m3" role="status"></div><div id="newc"></div></div>'+
+  '<div class="pcard"><h2>My batches</h2><div id="bl"><p class="hint">Loading…</p></div></div>'+
+  '<div class="pcard"><h2>Recent payments</h2><div id="pl"><p class="hint">Loading…</p></div><div class="btns" style="margin-top:8px"><button class="btn alt hidden" id="plm">Show more</button></div></div>'+
+  '<div class="pcard"><h2>Give or cancel a pass</h2><label class="fld" for="em">Student email</label><input class="inp" id="em" type="email" placeholder="student@gmail.com"><div class="btns" style="margin-top:10px"><button class="btn alt" id="fd">Look up</button></div><div id="who" class="hint"></div><label class="fld" for="dy">Days to give (1 to 365)</label><input class="inp" id="dy" inputmode="numeric" value="30"><div class="btns" style="margin-top:10px"><button class="btn" id="gv">Give days</button><button class="btn ghost" id="rv">Cancel pass</button></div><div class="msg" id="m4" role="status"></div></div>';
+  $('tog').onclick=toggle; $('sv').onclick=save; $('mk').onclick=make; $('fd').onclick=function(){ who('find'); }; $('gv').onclick=function(){ who('give'); }; $('rv').onclick=function(){ who('revoke'); };
+  $('whu').textContent=location.origin+'/api/paystack';
+  batches(); payRows(false);
+}
+async function reload(){ D=await LawLink.payAdminGet(); draw(); }
+var pnext='';
+async function payRows(more){
+  try{
+    var r=await LawLink.payList(more?pnext:'',30), box=$('pl');
+    if(!more) box.innerHTML='';
+    if(!more&&!r.rows.length){ box.innerHTML='<p class="hint">No card payments yet.</p>'; $('plm').classList.add('hidden'); return; }
+    box.insertAdjacentHTML('beforeend',r.rows.map(function(x){ return '<div class="brow"><div><b>₦'+Number(x.amount).toLocaleString()+' · '+esc(x.status)+'</b><div class="hint" style="margin:0">'+esc(x.email||'unknown')+' · '+dt(x.at)+'</div></div>'+(x.status==='pending'?'<button class="btn alt" data-rc="'+esc(x.ref)+'" style="padding:8px 12px;font-size:14px">Check again</button>':'')+'</div>'; }).join(''));
+    pnext=r.next; $('plm').classList.toggle('hidden',!pnext); $('plm').onclick=function(){ payRows(true); };
+    box.onclick=async function(e){ var b=e.target.closest('[data-rc]'); if(!b) return; b.disabled=true; try{ var d=await LawLink.payRecheck(b.dataset.rc); b.textContent=d.status==='paid'?'Paid':d.status; if(d.status==='paid'){ D=await LawLink.payAdminGet(); draw(); } }catch(er){ b.textContent=er.message; } };
+  }catch(e){ $('pl').innerHTML='<p class="hint">'+esc(e.message)+'</p>'; }
+}
+async function toggle(){
+  var on=!D.conf.on;
+  if(!confirm(on?'Switch payment ON? Students without a pass will lose access to everything except the free preview. Students who joined before today get '+D.conf.trial+' free days.':'Switch payment OFF? Everyone gets full access again.')) return;
+  try{ D=await LawLink.paySet({on:on}); draw(); say('m1',on?'Payment is on.':'Payment is off.'); }catch(e){ say('m1',e.message,1); }
+}
+async function save(){
+  try{ D=await LawLink.paySet({price:$('pr').value,trial:$('tr').value,help:$('hp').value}); draw(); say('m2','Saved.'); }catch(e){ say('m2',e.message,1); }
+}
+async function make(){
+  var b=$('mk'); b.disabled=true; say('m3','Making codes…');
+  try{
+    var r=await LawLink.codesMake($('cn').value,$('cl').value);
+    $('newc').innerHTML='<label class="fld" for="ct">'+r.codes.length+' new codes ('+esc(r.batch)+')</label><textarea class="inp" id="ct" readonly></textarea><div class="btns" style="margin-top:10px"><button class="btn alt" id="cp">Copy all</button><button class="btn alt" id="dl">Download as CSV</button></div>';
+    $('ct').value=r.codes.join('\n'); say('m3','Done. Keep these safe. You can also find them under My batches.');
+    $('cp').onclick=function(){ $('ct').select(); try{ navigator.clipboard.writeText($('ct').value).then(function(){say('m3','Copied.')},function(){document.execCommand('copy');say('m3','Copied.')}); }catch(e){ document.execCommand('copy'); say('m3','Copied.'); } };
+    $('dl').onclick=function(){ csv('lawlink-codes-'+r.batch.replace(/[^\w-]+/g,'_')+'.csv',['Code,Days,Batch'].concat(r.codes.map(function(c){return [c,30,cell(r.batch)].join(',')}))); };
+    D=await LawLink.payAdminGet(); batches();
+  }catch(e){ say('m3',e.message,1); } finally{ b.disabled=false; }
+}
+async function batches(){
+  try{
+    var r=await LawLink.codesBatches();
+    $('bl').innerHTML=r.batches.length?r.batches.map(function(x){ return '<div class="brow"><div><b>'+esc(x.batch)+'</b><div class="hint" style="margin:0">'+x.n+' codes · '+x.used+' used · made '+dt(x.at)+'</div></div><button class="btn alt" data-b="'+esc(x.batch)+'" style="padding:8px 12px;font-size:14px">Download unused</button></div>'; }).join(''):'<p class="hint">No codes made yet.</p>';
+    $('bl').onclick=async function(e){
+      var b=e.target.closest('[data-b]'); if(!b) return; b.disabled=true;
+      try{ var rows=[], cur=''; for(var i=0;i<50;i++){ var d=await LawLink.codesList(b.dataset.b,'unused',cur,2000); rows=rows.concat(d.rows); cur=d.next; if(!cur) break; }
+        csv('lawlink-unused-'+b.dataset.b.replace(/[^\w-]+/g,'_')+'.csv',['Code,Days,Batch'].concat(rows.map(function(x){return [x.code,x.days,cell(x.batch)].join(',')}))); say('m3',rows.length+' unused codes downloaded.'); }
+      catch(er){ say('m3',er.message,1); } finally{ b.disabled=false; }
+    };
+  }catch(e){ $('bl').innerHTML='<p class="hint">'+esc(e.message)+'</p>'; }
+}
+async function who(mode){
+  var em=$('em').value.trim(); if(!em){ say('m4','Type the student\'s email first.',1); return; }
+  try{
+    var r;
+    if(mode==='give'){ var dy=$('dy').value; if(!confirm('Give '+dy+' days to '+em+'?')) return; r=await LawLink.passGrant(em,dy); }
+    else if(mode==='revoke'){ if(!confirm('Cancel the pass for '+em+'?')) return; r=await LawLink.passRevoke(em); }
+    else r=await LawLink.passFind(em);
+    var s=r.state;
+    $('who').textContent=r.name+' · '+(s.why==='pass'?'Pass active until '+dt(s.until):s.why==='trial'?'Free access until '+dt(s.until):s.why==='off'?'Payment is off, so everything is open.':'No active pass'+(s.until?' (ended '+dt(s.until)+')':''));
+    say('m4',mode==='give'?'Days added.':mode==='revoke'?'Pass cancelled.':'');
+    if(mode!=='find') D=await LawLink.payAdminGet();
+  }catch(e){ say('m4',e.message,1); }
+}
+reload().catch(function(e){ $('main').innerHTML='<p class="hint">'+esc(e.message)+'</p>'; });
+})();
+</script>
+</body>
+</html>
